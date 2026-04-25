@@ -35,11 +35,9 @@ export const RouteForm = ({ hour, setHour, typeUrgence, setTypeUrgence, onCalcul
                 disabled={loading}
                 className="w-full bg-primary hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-red-500/20 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
             >
-                {loading ? "Calcul en cours..." : (
-                    <>
-                        Calculer route d'urgence
-                        <Navigation size={18} className="group-hover:translate-x-1 transition-transform" />
-                    </>
+                {loading ? "Calcul en cours..." : "Calculer route d'urgence"}
+                {!loading && (
+                    <Navigation size={18} className="group-hover:translate-x-1 transition-transform" />
                 )}
             </button>
         </div>
