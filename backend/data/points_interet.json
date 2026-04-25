@@ -1,0 +1,65 @@
+[
+  {
+    "id": "H001",
+    "type": "hopital",
+    "nom": "Hôpital Central de Yaoundé",
+    "lat": 3.8667,
+    "lon": 11.5167,
+    "capacite_trauma": 50,
+    "ouvert_24h": "oui"
+  },
+  {
+    "id": "H002",
+    "type": "hopital",
+    "nom": "CHU de Yaoundé",
+    "lat": 3.8742,
+    "lon": 11.5089,
+    "capacite_trauma": 80,
+    "ouvert_24h": "oui"
+  },
+  {
+    "id": "H003",
+    "type": "hopital",
+    "nom": "Hôpital Général",
+    "lat": 3.859,
+    "lon": 11.523,
+    "capacite_trauma": 30,
+    "ouvert_24h": "oui"
+  },
+  {
+    "id": "H004",
+    "type": "hopital",
+    "nom": "Clinique Ngousso",
+    "lat": 3.882,
+    "lon": 11.541,
+    "capacite_trauma": 10,
+    "ouvert_24h": "non"
+  },
+  {
+    "id": "F001",
+    "type": "caserne_pompiers",
+    "nom": "Brigade de Sapeurs-Pompiers Nord",
+    "lat": 3.895,
+    "lon": 11.505,
+    "vehicules": 3,
+    "ouvert_24h": "oui"
+  },
+  {
+    "id": "F002",
+    "type": "caserne_pompiers",
+    "nom": "Brigade Centre-Ville",
+    "lat": 3.866,
+    "lon": 11.518,
+    "vehicules": 2,
+    "ouvert_24h": "oui"
+  },
+  {
+    "id": "P001",
+    "type": "commissariat",
+    "nom": "Commissariat Central",
+    "lat": 3.868,
+    "lon": 11.516,
+    "vehicules": 5,
+    "ouvert_24h": "oui"
+  }
+]

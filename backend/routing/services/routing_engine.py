@@ -154,8 +154,22 @@ class RoutingEngine:
                     chosen_hospital_id = h.id
                     break
             
-            for node_id in found_path[:-1]: # exclude virtual node
-                node_data = G.nodes[node_id]
-                coords_path.append([node_data['lat'], node_data['lng']])
+            for i in range(len(found_path) - 2): # exclude virtual node and its predecessor
+                u, v = found_path[i], found_path[i+1]
+                edge_data = G.get_edge_data(u, v)
+                
+                if edge_data and 'geometry' in edge_data:
+                    # Collect all points except the last one to avoid duplicates with next edge
+                    for lng, lat in edge_data['geometry'][:-1]:
+                        coords_path.append([lat, lng])
+                else:
+                    # Fallback to node if no geometry
+                    node_data = G.nodes[u]
+                    coords_path.append([node_data['lat'], node_data['lng']])
+            
+            # Add the very last node (the hospital node)
+            last_real_node = found_path[-2]
+            node_data = G.nodes[last_real_node]
+            coords_path.append([node_data['lat'], node_data['lng']])
                 
         return coords_path, chosen_hospital_id, final_cost, nodes_explored, duration_ms, location_name
