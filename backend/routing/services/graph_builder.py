@@ -16,59 +16,93 @@ class GraphBuilder:
     def load_graph(self, file_path):
         G = nx.DiGraph()
         
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        elements = data.get('elements', [])
+        if 'elements' in data:
+            # Format OSM JSON (Overpass)
+            self._load_from_elements(G, data['elements'])
+        elif 'features' in data:
+            # Format GeoJSON (Standard)
+            self._load_from_features(G, data['features'])
+            
+        self._graph = G
+        return G
+
+    def _load_from_elements(self, G, elements):
         nodes_map = {}
-        
-        # 1. Parse Nodes
         for el in elements:
             if el['type'] == 'node':
-                nodes_map[el['id']] = {
-                    'lat': el['lat'],
-                    'lng': el.get('lon') or el.get('lng')
-                }
-                G.add_node(el['id'], **nodes_map[el['id']])
+                node_id = str(el['id'])
+                nodes_map[node_id] = {'lat': el['lat'], 'lng': el.get('lon') or el.get('lng')}
+                G.add_node(node_id, **nodes_map[node_id])
 
-        # 2. Parse Ways
         for el in elements:
             if el['type'] == 'way':
-                way_id = el['id']
-                node_ids = el['nodes']
+                way_id = str(el['id'])
+                node_ids = [str(nid) for nid in el['nodes']]
                 tags = el.get('tags', {})
-                
-                # Calculate distance and add edges between consecutive nodes
                 for i in range(len(node_ids) - 1):
                     u, v = node_ids[i], node_ids[i+1]
                     if u in nodes_map and v in nodes_map:
-                        dist = self.haversine(
-                            nodes_map[u]['lat'], nodes_map[u]['lng'],
-                            nodes_map[v]['lat'], nodes_map[v]['lng']
-                        )
-                        
-                        # Store geometry as a simple list of 2 points for now 
-                        # (since way segments are atomic in this model)
-                        geometry = [
-                            [nodes_map[u]['lng'], nodes_map[u]['lat']],
-                            [nodes_map[v]['lng'], nodes_map[v]['lat']]
-                        ]
-                        
-                        edge_props = {
-                            'segment_id': str(way_id), # road_id in traffic csv
-                            'distance_m': dist,
-                            'road_type': tags.get('highway', 'residential'),
-                            'surface': tags.get('surface', 'asphalt'),
-                            'oneway': tags.get('oneway', 'no')
-                        }
-                        
-                        G.add_edge(u, v, geometry=geometry, **edge_props)
-                        
-                        if edge_props['oneway'] != 'yes':
-                            G.add_edge(v, u, geometry=geometry[::-1], **edge_props)
-                
-        self._graph = G
-        return G
+                        self._add_edge(G, u, v, nodes_map[u], nodes_map[v], way_id, tags)
+
+    def _load_from_features(self, G, features):
+        for feat in features:
+            geom = feat.get('geometry')
+            if not geom: continue
+            
+            tags = feat.get('properties', {})
+            way_id = str(feat.get('id') or tags.get('@id') or hash(str(feat)))
+            
+            if geom['type'] == 'LineString':
+                self._process_coords(G, geom['coordinates'], way_id, tags)
+            elif geom['type'] == 'MultiLineString':
+                for line in geom['coordinates']:
+                    self._process_coords(G, line, way_id, tags)
+
+    def _process_coords(self, G, coords, way_id, tags):
+        # In GeoJSON, we might not have node IDs, so we use coordinates as keys
+        for i in range(len(coords) - 1):
+            p1, p2 = coords[i], coords[i+1] # [lng, lat]
+            # Rounding to 7 decimal places (~1cm) to glue nearby points
+            u = f"{p1[1]:.7f},{p1[0]:.7f}"
+            v = f"{p2[1]:.7f},{p2[0]:.7f}"
+            
+            u_data = {'lat': p1[1], 'lng': p1[0]}
+            v_data = {'lat': p2[1], 'lng': p2[0]}
+            
+            G.add_node(u, **u_data)
+            G.add_node(v, **v_data)
+            self._add_edge(G, u, v, u_data, v_data, way_id, tags)
+
+    def _add_edge(self, G, u, v, u_data, v_data, way_id, tags):
+        dist = self.haversine(u_data['lat'], u_data['lng'], v_data['lat'], v_data['lng'])
+        oneway = tags.get('oneway') in ['yes', 'true', '1']
+        
+        edge_props = {
+            'segment_id': way_id,
+            'distance_m': dist,
+            'road_type': tags.get('highway', 'residential'),
+            'surface': tags.get('surface', 'asphalt'),
+            'oneway': oneway,
+            'geometry': [[u_data['lng'], u_data['lat']], [v_data['lng'], v_data['lat']]]
+        }
+        
+        G.add_edge(u, v, **edge_props)
+        
+        # Reverse edge
+        rev_props = edge_props.copy()
+        rev_props['geometry'] = edge_props['geometry'][::-1]
+        
+        if not oneway:
+            G.add_edge(v, u, **rev_props)
+        else:
+            # For ambulances, a one-way is just a very "expensive" road in reverse
+            # instead of a wall, to ensure connectivity in degraded states.
+            rev_props['is_wrong_way'] = True
+            G.add_edge(v, u, **rev_props)
+
 
     def haversine(self, lat1, lon1, lat2, lon2):
         R = 6371000 
@@ -80,11 +114,54 @@ class GraphBuilder:
 
     def get_graph(self):
         if self._graph is None:
-            # Switch to official synthetic roads file
-            data_path = os.path.join(os.path.dirname(__file__), '../../data/yaounde_roads_synthetic.geojson')
-            # Fallback if file doesn't exist (safety)
+            # Priority to real OSM export for high-precision geometry
+            data_path = os.path.join(os.path.dirname(__file__), '../../data/export.geojson')
+            
+            # Fallback to synthetic if real export is missing
+            if not os.path.exists(data_path):
+                 data_path = os.path.join(os.path.dirname(__file__), '../../data/yaounde_roads_synthetic.geojson')
+            
             if not os.path.exists(data_path):
                  data_path = os.path.join(os.path.dirname(__file__), '../../data/sample_network.geojson')
             
             self.load_graph(data_path)
+            self._prepare_spatial_index()
         return self._graph
+
+    def _prepare_spatial_index(self):
+        import numpy as np
+        nodes_data = []
+        node_ids = []
+        for node, data in self._graph.nodes(data=True):
+            if 'lat' in data and 'lng' in data:
+                nodes_data.append([data['lat'], data['lng']])
+                node_ids.append(node)
+        
+        self._nodes_coords = np.array(nodes_data)
+        self._node_ids_array = node_ids
+
+    def find_nearest_node(self, lat, lng):
+        import numpy as np
+        if not hasattr(self, '_nodes_coords'):
+            self._prepare_spatial_index()
+            
+        point = np.array([lat, lng])
+        dists = np.sum((self._nodes_coords - point)**2, axis=1)
+        nearest_idx = np.argmin(dists)
+        return self._node_ids_array[nearest_idx]
+
+    def find_nearest_nodes(self, lat, lng, k=5):
+        import numpy as np
+        if not hasattr(self, '_nodes_coords'):
+            self._prepare_spatial_index()
+            
+        point = np.array([lat, lng])
+        dists = np.sum((self._nodes_coords - point)**2, axis=1)
+        # Get top k nearest indices using partition (faster than full sort)
+        k = min(k, len(dists))
+        nearest_indices = np.argpartition(dists, k-1)[:k]
+        # Sort these k points by actual distance
+        nearest_indices = nearest_indices[np.argsort(dists[nearest_indices])]
+        return [self._node_ids_array[idx] for idx in nearest_indices]
+
+

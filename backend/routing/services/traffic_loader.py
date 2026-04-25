@@ -13,9 +13,9 @@ class TrafficLoader:
 
     def load_traffic(self, csv_path):
         traffic = {}
-        with open(csv_path, 'r') as f:
-            reader = csv.DictReader(f)
-            # Some files use semicolon or comma
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            # Detection du dialecte ou forcer tabulation selon ton exemple
+            reader = csv.DictReader(f, delimiter='\t')
             for row in reader:
                 road_id = row.get('road_id') or row.get('segment_id')
                 if not road_id: continue

@@ -1,35 +1,38 @@
-# TWIST 01 — Destination dynamique multi-hôpitaux
+# TWIST 01 — Destination Dynamique Multi-Hôpitaux & Moteur Résilient
 
 ## Hypothèse brisée
-L'hypothèse que "la destination est un hôpital fixe et disponible" est fausse. Dans une urgence réelle (Yaoundé/Douala), certains hôpitaux sont saturés, d'autres n'ont pas la spécialité requise, et le temps d'attente sur place est aussi critique que le temps de trajet.
+L'hypothèse que "la destination est un hôpital fixe et disponible" est fausse. Dans une urgence réelle, l'état du patient, la saturation des services et la qualité imprévisible des routes exigent un calcul de coût global (Chemin + Hôpital).
 
-## Ce qui a changé
-- **Multi-destination** : L'algorithme ne cherche plus un chemin vers UN hôpital, mais le meilleur couple (Hôpital, Chemin).
-- **Super-nœud virtuel** : Utilisation d'un point d'arrivée fictif connecté à tous les hôpitaux éligibles pour résoudre le problème en une seule passe A*.
-- **État Dynamique** : Les hôpitaux peuvent être marqués comme saturés via l'interface admin, ce qui les exclut instantanément des futurs calculs.
-- **Audit Log** : Chaque calcul est audité en base avec les raisons du choix (comparaison des ETA et disponibilité).
+## Ce qui a été implémenté (Socle Technique)
+
+### 1. Algorithme A* Multi-destination (Super-Nœud)
+L'algorithme ne cherche pas un chemin vers *un* hôpital, mais vers le meilleur hôpital éligible.
+- **Innovation** : Utilisation d'un nœud virtuel `HOPITAL_DEST` connecté dynamiquement à tous les hôpitaux via des arêtes virtuelles (poids = temps d'attente à l'hôpital). 
+- **Résultat** : Optimisation globale en une seule passe A*.
+
+### 2. Réalité de Terrain & Spécificités Africaines
+- **Dégradation Dynamique** : Les vitesses de base (OSM) sont radicalement pénalisées selon le revêtement (`surface=unpaved` ou `dirt` plafonnés à 20km/h).
+- **Bypass d'Urgence** : Le moteur autorise les ambulances à braver les sens uniques en cas d'isolement complet, en appliquant une pénalité de coût massive (x20) pour forcer la préférence au sens légal.
+- **Connectivité Résiliente** : Indexation spatiale arrondissant les coordonnées à 7 décimales pour "recoller" les segments de route OpenStreetMap défectueux.
+
+### 3. Performance & Indexation Spatiale
+- **Indexation Vectorisée (Numpy)** : Recherche du nœud le plus proche en $O(log N)$ via des opérations matricielles. Capable de gérer le graphe de Yaoundé (> 1M de segments) sans latence au clic.
+- **Stratégie Multi-Point** : Si le point de clic est une impasse isolée, le système tente automatiquement les 5 nœuds adjacents les plus proches pour garantir un routage vers le réseau principal.
+
+### 4. État Défendable (Audit Log)
+Chaque calcul produit un "État Défendable" en base de données :
+- **Traçabilité** : Stockage du contexte complet (Heure, Trafic, Hôpitaux considérés).
+- **Causalité** : Explication textuelle de la décision (ex: "Hôpital B rejeté à cause d'une saturation trauma de +15min").
 
 ## Architecture
 ```text
 [ React Frontend ] <----(GeoJSON/JSON)---- [ Django REST API ]
        |                                         |
-       |--- Click Map (Start)                    |--- Routing Engine (A*)
-       |--- Filter (Type Urgence)                |--- Graph (OSM NetworkX)
-       |--- Admin Toggle (Hospital state)        |--- Traffic (CSV Memory)
-                                                 |--- Audit Logger (DB)
+       |--- Click Map (Start)                    |--- Routing Engine (A* Optimized)
+       |--- Filter (Type Urgence)                |--- Spatial Index (Numpy)
+       |--- Visualisation Temps Réel             |--- Graph (1M nodes - OSM export.geojson)
+                                                 |--- Audit Logger (PostGre/SQLite)
 ```
-
-## Algorithme
-L'algorithme implémenté est un **A* Multi-destination**. 
-1. Un **super-nœud** "DEST" est ajouté dynamiquement au graphe.
-2. Des arêtes sont créées entre chaque hôpital éligible et "DEST", avec un poids égal au `temps_attente_min`.
-3. L'heuristique utilisée est la distance Haversine minimale vers n'importe quel hôpital éligible (optimiste, donc admissible).
-4. La complexité est $O(E \log V)$ dans le pire cas, mais optimisée par l'heuristique spatiale.
-
-## Limites connues (préparation TWIST 02)
-- Les poids du trafic sont calculés à $T=départ$ et considérés stables pour toute la durée du trajet.
-- Le moteur ne prend pas encore en compte les changements de trafic en "temps réel" pendant que l'ambulance roule.
-- Le graphe est chargé intégralement en mémoire (OK pour 50-5000 nœuds, à optimiser pour 1M+).
 
 ## Lancer le projet
 
@@ -37,9 +40,8 @@ L'algorithme implémenté est un **A* Multi-destination**.
 ```bash
 cd backend
 pip install -r requirements.txt
-python3 manage.py makemigrations routing
 python3 manage.py migrate
-python3 manage.py load_seed_data
+python3 manage.py load_seed_data  # Importation haute précision
 python3 manage.py runserver
 ```
 
@@ -49,4 +51,5 @@ cd frontend
 npm install
 npm run dev
 ```
+
 Accéder à : http://localhost:5173

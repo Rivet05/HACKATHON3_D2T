@@ -35,27 +35,27 @@ class Command(BaseCommand):
             pois = json.load(f)
             
         count = 0
+        builder = GraphBuilder.get_instance()
         for poi in pois:
             if poi['type'] == 'hopital':
                 lat, lon = poi['lat'], poi['lon']
                 
-                # Find nearest node in graph
-                nearest_node = None
-                min_dist = float('inf')
-                for node_id, data in nodes:
-                    d = self.haversine(lat, lon, data['lat'], data['lng'])
-                    if d < min_dist:
-                        min_dist = d
-                        nearest_node = node_id
+                # Use accelerated search
+                nearest_node = builder.find_nearest_node(lat, lon)
+                
+                # Map specific specialties based on poi data
+                specialites = ["general"]
+                if poi.get('capacite_trauma', 0) > 0:
+                    specialites.append("trauma")
                 
                 Hospital.objects.update_or_create(
                     name=poi['nom'],
                     defaults={
                         'lat': lat,
                         'lng': lon,
-                        'urgences_disponibles': True,
-                        'specialites': ["trauma", "general", "cardio"], # Defaulting for now
-                        'temps_attente_min': 10,
+                        'urgences_disponibles': poi.get('ouvert_24h') == 'oui',
+                        'specialites': specialites,
+                        'temps_attente_min': 15 if poi.get('capacite_trauma', 0) < 20 else 5, # Dynamic wait based on capacity
                         'node_id': str(nearest_node)
                     }
                 )

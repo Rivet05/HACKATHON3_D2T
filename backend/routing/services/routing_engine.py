@@ -39,15 +39,22 @@ class RoutingEngine:
         seg_id = data.get('segment_id')
         
         vitesse_kmh = self.VITESSE_BASE.get(road_type, 30)
-        vitesse_ms = vitesse_kmh / 3.6
         
-        temps_pur_s = dist_m / vitesse_ms
-        temps_pur_min = temps_pur_s / 60
+        # African Reality: Penalty for unpaved surfaces
+        surface = data.get('surface', 'asphalt')
+        if surface in ['unpaved', 'dirt', 'gravel', 'ground']:
+            vitesse_kmh = min(vitesse_kmh, 20) # Max 20kmh on dirt
+            
+        vitesse_ms = vitesse_kmh / 3.6
+        temps_pur_min = (dist_m / vitesse_ms) / 60
         
         traffic_mult = self.traffic_loader.get_multiplier(seg_id, hour)
-        penalite = self.PENALITE_TYPE.get(road_type, 1.2)
+        penalite_type = self.PENALITE_TYPE.get(road_type, 1.2)
         
-        return temps_pur_min * traffic_mult * penalite
+        # Heavy penalty for wrong way (ambulance bypass)
+        wrong_way_mult = 20.0 if data.get('is_wrong_way') else 1.0
+        
+        return temps_pur_min * traffic_mult * penalite_type * wrong_way_mult
 
     def haversine(self, lat1, lon1, lat2, lon2):
         R = 6371000  # radius of Earth in meters
@@ -60,84 +67,75 @@ class RoutingEngine:
     def find_route(self, start_lat, start_lng, eligible_hospitals, hour):
         G = self.graph_builder.get_graph()
         
-        # 1. Find nearest node to start
-        start_node = None
-        min_dist = float('inf')
-        for node, data in G.nodes(data=True):
-            d = self.haversine(start_lat, start_lng, data['lat'], data['lng'])
-            if d < min_dist:
-                min_dist = d
-                start_node = node
+        # 1. Multi-retry nearest node search (try top 5 nodes in case of islands)
+        potential_starts = self.graph_builder.find_nearest_nodes(start_lat, start_lng, k=5)
         
-        if not start_node:
+        if not potential_starts:
             return None, 0, 0, 0, 0, "Lieu inconnu"
             
         location_name = self.get_location_name(start_lat, start_lng)
-            
-        # 2. Add virtual super-node "HOPITAL_DEST"
         dest_node = "HOPITAL_DEST"
+        
+        # 2. Add virtual super-node
         v_edges = []
-        for h in eligible_hospitals:
-            # Join hospital node to super-node with weight = waiting time
-            # Note: G is a DiGraph, so we add edge FROM hospital TO super-node or vice versa?
-            # We want to go FROM start TO super-node. 
-            # So start -> ... -> hospital -> super-node.
-            G.add_edge(h.node_id, dest_node, weight=h.temps_attente_min, is_virtual=True)
-            v_edges.append((h.node_id, dest_node))
-
-        # 3. Custom A* implementation
-        # Heuristic: min haversine dist to any eligible hospital / (max speed / 60)
-        max_speed_mpm = (60 / 3.6) * 60 # primary speed in meters per minute
-        
-        def heuristic(n):
-            if n == dest_node: return 0
-            node_data = G.nodes[n]
-            min_h_dist = float('inf')
+        try:
             for h in eligible_hospitals:
-                d = self.haversine(node_data['lat'], node_data['lng'], h.lat, h.lng)
-                if d < min_h_dist:
-                    min_h_dist = d
-            return (min_h_dist / max_speed_mpm)
+                G.add_edge(h.node_id, dest_node, weight=h.temps_attente_min, is_virtual=True)
+                v_edges.append((h.node_id, dest_node))
 
-        start_time = time.time()
-        
-        queue = [(0, start_node, 0, [])]
-        visited = {}
-        nodes_explored = 0
-        
-        found_path = None
-        final_cost = 0
-        
-        while queue:
-            (priority, current_node, current_cost, path) = heapq.heappop(queue)
-            nodes_explored += 1
+            # 3. Optimized A* implementation
+            max_speed_mpm = (60 / 3.6) * 60 
+            h_coords = [(h.lat, h.lng) for h in eligible_hospitals]
+            k_lat, k_lng = 111000, 111000 * 0.997
             
-            if current_node in visited and visited[current_node] <= current_cost:
-                continue
-                
-            visited[current_node] = current_cost
-            new_path = path + [current_node]
-            
-            if current_node == dest_node:
-                found_path = new_path
-                final_cost = current_cost
-                break
-                
-            for neighbor, edge_data in G[current_node].items():
-                if edge_data.get('is_virtual'):
-                    edge_cost = edge_data['weight']
-                else:
-                    edge_cost = self.get_edge_cost(current_node, neighbor, edge_data, hour)
-                
-                total_cost = current_cost + edge_cost
-                if neighbor not in visited or visited[neighbor] > total_cost:
-                    h_val = heuristic(neighbor)
-                    heapq.heappush(queue, (total_cost + h_val, neighbor, total_cost, new_path))
+            def heuristic(n):
+                if n == dest_node: return 0
+                node_data = G.nodes[n]
+                if 'lat' not in node_data: return 0 
+                n_lat, n_lng = node_data['lat'], node_data['lng']
+                min_m_dist = min(math.sqrt((k_lat*(n_lat-hlat))**2 + (k_lng*(n_lng-hlng))**2) for hlat, hlng in h_coords)
+                return min_m_dist / max_speed_mpm
 
-        # 4. Cleanup virtual node
-        for u, v in v_edges:
-            G.remove_edge(u, v)
-        G.remove_node(dest_node)
+            # Try each potential start node until a path is found
+            found_path, final_cost, nodes_explored = None, 0, 0
+            start_time = time.time()
+            
+            for start_node in potential_starts:
+                queue = [(0, start_node, 0, [])]
+                visited = {start_node: 0}
+                
+                while queue:
+                    if time.time() - start_time > 60.0: # 60s timeout
+                        print(f"DEBUG: Timeout reached after {nodes_explored} nodes")
+                        break
+                         
+                    (priority, current_node, current_cost, path) = heapq.heappop(queue)
+                    nodes_explored += 1
+                    
+                    if current_node == dest_node:
+                        found_path = path + [current_node]
+                        final_cost = current_cost
+                        break
+                        
+                    for neighbor, edge_data in G[current_node].items():
+                        edge_cost = edge_data['weight'] if edge_data.get('is_virtual') else self.get_edge_cost(current_node, neighbor, edge_data, hour)
+                        total_cost = current_cost + edge_cost
+                        
+                        if neighbor not in visited or visited[neighbor] > total_cost:
+                            visited[neighbor] = total_cost
+                            h_val = heuristic(neighbor)
+                            heapq.heappush(queue, (total_cost + h_val, neighbor, total_cost, path + [current_node]))
+                
+                if found_path:
+                    print(f"DEBUG: Path found using start_node {start_node} after exploring {nodes_explored} nodes")
+                    break
+        finally:
+            # 4. Cleanup
+            for u, v in v_edges:
+                if G.has_edge(u, v): G.remove_edge(u, v)
+            if G.has_node(dest_node): G.remove_node(dest_node)
+
+
         
         end_time = time.time()
         duration_ms = int((end_time - start_time) * 1000)
