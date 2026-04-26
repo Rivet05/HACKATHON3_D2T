@@ -1,9 +1,8 @@
 import heapq
 import math
 import time
-import networkx as nx
 from .graph_builder import GraphBuilder
-from .traffic_loader import TrafficLoader
+from .traffic_cache import TrafficCache
 
 class RoutingEngine:
     VITESSE_BASE = {
@@ -23,7 +22,7 @@ class RoutingEngine:
 
     def __init__(self):
         self.graph_builder = GraphBuilder.get_instance()
-        self.traffic_loader = TrafficLoader.get_instance()
+        self.traffic_cache = TrafficCache.get_instance()
 
     def get_location_name(self, lat, lng):
         if lat > 3.87:
@@ -33,7 +32,7 @@ class RoutingEngine:
         else:
             return "Mvan / Ekounou" if lng > 11.51 else "Biyem-Assi / Mendong"
 
-    def get_edge_cost(self, u, v, data, hour):
+    def get_edge_cost(self, u, v, data, now_mins):
         dist_m = data.get('distance_m', 1000)
         road_type = data.get('road_type', 'residential')
         seg_id = data.get('segment_id')
@@ -43,15 +42,19 @@ class RoutingEngine:
         # African Reality: Penalty for unpaved surfaces
         surface = data.get('surface', 'asphalt')
         if surface in ['unpaved', 'dirt', 'gravel', 'ground']:
-            vitesse_kmh = min(vitesse_kmh, 20) # Max 20kmh on dirt
+            vitesse_kmh = min(vitesse_kmh, 20) 
             
         vitesse_ms = vitesse_kmh / 3.6
         temps_pur_min = (dist_m / vitesse_ms) / 60
         
-        traffic_mult = self.traffic_loader.get_multiplier(seg_id, hour)
-        penalite_type = self.PENALITE_TYPE.get(road_type, 1.2)
+        # Twist 02: Use TrafficCache with actual time at segment
+        traffic_mult = self.traffic_cache.get_multiplier(seg_id, now_mins)
         
-        # Heavy penalty for wrong way (ambulance bypass)
+        # Extreme blockage injection (Twist 02)
+        if traffic_mult >= 99.0:
+            return 9999.0 # Effectively blocked
+            
+        penalite_type = self.PENALITE_TYPE.get(road_type, 1.2)
         wrong_way_mult = 20.0 if data.get('is_wrong_way') else 1.0
         
         return temps_pur_min * traffic_mult * penalite_type * wrong_way_mult
@@ -64,10 +67,11 @@ class RoutingEngine:
         a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
         return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-    def find_route(self, start_lat, start_lng, eligible_hospitals, hour):
+    def find_route(self, start_lat, start_lng, eligible_hospitals, hour_start, min_start=0):
         G = self.graph_builder.get_graph()
+        base_time_mins = hour_start * 60 + min_start
         
-        # 1. Multi-retry nearest node search (try top 5 nodes in case of islands)
+        # 1. Multi-retry nearest node search
         potential_starts = self.graph_builder.find_nearest_nodes(start_lat, start_lng, k=5)
         
         if not potential_starts:
@@ -83,7 +87,7 @@ class RoutingEngine:
                 G.add_edge(h.node_id, dest_node, weight=h.temps_attente_min, is_virtual=True)
                 v_edges.append((h.node_id, dest_node))
 
-            # 3. Optimized A* implementation
+            # 3. Time-Dependent A* implementation
             max_speed_mpm = (60 / 3.6) * 60 
             h_coords = [(h.lat, h.lng) for h in eligible_hospitals]
             k_lat, k_lng = 111000, 111000 * 0.997
@@ -96,17 +100,15 @@ class RoutingEngine:
                 min_m_dist = min(math.sqrt((k_lat*(n_lat-hlat))**2 + (k_lng*(n_lng-hlng))**2) for hlat, hlng in h_coords)
                 return min_m_dist / max_speed_mpm
 
-            # Try each potential start node until a path is found
             found_path, final_cost, nodes_explored = None, 0, 0
-            start_time = time.time()
+            start_calc_time = time.time()
             
             for start_node in potential_starts:
                 queue = [(0, start_node, 0, [])]
                 visited = {start_node: 0}
                 
                 while queue:
-                    if time.time() - start_time > 60.0: # 60s timeout
-                        print(f"DEBUG: Timeout reached after {nodes_explored} nodes")
+                    if time.time() - start_calc_time > 60.0:
                         break
                          
                     (priority, current_node, current_cost, path) = heapq.heappop(queue)
@@ -118,7 +120,14 @@ class RoutingEngine:
                         break
                         
                     for neighbor, edge_data in G[current_node].items():
-                        edge_cost = edge_data['weight'] if edge_data.get('is_virtual') else self.get_edge_cost(current_node, neighbor, edge_data, hour)
+                        # TWIST 02: Arrival time at THIS neighbor
+                        arrival_time_mins = base_time_mins + current_cost
+                        
+                        if edge_data.get('is_virtual'):
+                            edge_cost = edge_data['weight']
+                        else:
+                            edge_cost = self.get_edge_cost(current_node, neighbor, edge_data, arrival_time_mins)
+                            
                         total_cost = current_cost + edge_cost
                         
                         if neighbor not in visited or visited[neighbor] > total_cost:
@@ -126,9 +135,8 @@ class RoutingEngine:
                             h_val = heuristic(neighbor)
                             heapq.heappush(queue, (total_cost + h_val, neighbor, total_cost, path + [current_node]))
                 
-                if found_path:
-                    print(f"DEBUG: Path found using start_node {start_node} after exploring {nodes_explored} nodes")
-                    break
+                if found_path: break
+
         finally:
             # 4. Cleanup
             for u, v in v_edges:
@@ -138,7 +146,7 @@ class RoutingEngine:
 
         
         end_time = time.time()
-        duration_ms = int((end_time - start_time) * 1000)
+        duration_ms = int((end_time - start_calc_time) * 1000)
         
         # Convert path to GeoJSON/Coords
         coords_path = []

@@ -11,6 +11,7 @@ export const routingService = {
     getHospitals: () => api.get('/hospitals/'),
     updateHospital: (id, data) => api.patch(`/hospitals/${id}/`, data),
     getAuditLogs: () => api.get('/audit/'),
+    injectBlockage: () => api.post('/traffic/inject_blockage/'),
 };
 
 export default api;

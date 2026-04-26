@@ -48,25 +48,48 @@ export const RouteForm = ({ hour, setHour, typeUrgence, setTypeUrgence, onCalcul
 
 export const RouteResult = ({ result }) => {
     if (!result) return null;
+    const stats = result.traffic_stats || {};
+    const confidence = stats.confiance_globale ?? 1.0;
+    const uncertainty = Math.round((1 - confidence) * 5); // up to 5 min uncertainty
+
     return (
-        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 mt-4 flex flex-col gap-2 animate-in fade-in slide-in-from-top duration-300">
-            <div className="flex items-center gap-2 text-green-400 font-bold">
-                <CheckCircle2 size={20} /> Meilleur itinéraire trouvé
+        <div className="flex flex-col gap-4 mt-4 animate-in fade-in slide-in-from-top duration-300">
+            {/* Freshness Indicator (Twist 02) */}
+            <div className={`px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 w-fit
+                ${confidence > 0.8
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : confidence > 0.5
+                        ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                        : 'bg-red-500/10 border-red-500/30 text-red-400 animate-pulse'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${confidence > 0.8 ? 'bg-green-400' : confidence > 0.5 ? 'bg-yellow-400' : 'bg-red-400'}`} />
+                {confidence > 0.8 ? 'Données Fraîches' : confidence > 0.5 ? 'Données Dégradées' : 'Données Suspectes'}
+                <span className="opacity-50">• {stats.age_moyen_secondes}s</span>
             </div>
-            <div className="text-2xl font-black">{result.hopital.name}</div>
-            <div className="flex items-center gap-6 mt-2">
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">ETA Estimé</span>
-                    <span className="text-xl font-bold flex items-center gap-1">
-                        <Clock size={16} className="text-primary" /> {result.eta_minutes.toFixed(0)} min
-                    </span>
+
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-green-400 font-bold">
+                    <CheckCircle2 size={20} /> Meilleur itinéraire trouvé
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Distance relative</span>
-                    <span className="text-xl font-bold flex items-center gap-1">
-                        {result.total_cost.toFixed(1)} <span className="text-xs text-slate-500">pts</span>
-                    </span>
+                <div className="text-2xl font-black">{result.hospital.name}</div>
+
+                <div className="flex items-center gap-6 mt-4">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">ETA Estimé</span>
+                        <span className="text-xl font-bold flex items-baseline gap-1">
+                            <Clock size={16} className="text-primary mr-1" />
+                            {result.eta.toFixed(0)}
+                            <span className="text-xs font-medium text-slate-400">min</span>
+                            {uncertainty > 0 && (
+                                <span className="text-xs text-slate-500 ml-1 font-medium">± {uncertainty}m</span>
+                            )}
+                        </span>
+                    </div>
                 </div>
+                {uncertainty > 0 && (
+                    <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
+                        <div className="h-full bg-yellow-500/30" style={{ width: `${(uncertainty / 10) * 100}%` }} />
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -76,29 +99,40 @@ export const AuditPanel = ({ audit }) => {
     if (!audit) return null;
     return (
         <div className="glass-panel rounded-xl p-5 mt-4 flex flex-col gap-1 border-l-4 border-l-accent">
-            <h3 className="text-sm font-bold flex items-center gap-2 mb-2 text-accent uppercase tracking-widest">
-                <ShieldAlert size={16} /> Rapport d'Audit
+            <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-accent uppercase tracking-widest">
+                <ShieldAlert size={16} /> Rapport d'Audit & Recalculs
             </h3>
-            <p className="text-xs text-slate-300 italic mb-1">"{audit.raison_choix}"</p>
-            <div className="text-[10px] text-slate-400 mb-3 flex items-center gap-1 uppercase tracking-wide">
-                <Navigation size={10} className="text-primary" /> Départ: <span className="text-slate-200 font-bold">{audit.depart_nom || "Position inconnue"}</span>
-            </div>
 
-            <div className="flex flex-col gap-2">
-                {audit.hopitaux_consideres.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between text-[11px] border-b border-slate-700/50 pb-1">
-                        <span className={h.eligible ? "text-slate-200" : "text-slate-500"}>{h.name}</span>
-                        <span className={h.eligible ? "text-green-500" : "text-red-500/70"}>
-                            {h.eligible ? "Eligible" : h.reason}
+            {/* Timeline de recalculs (Twist 02) */}
+            <div className="mb-6 flex flex-col gap-3 relative pl-4 border-l border-slate-700">
+                <div className="text-[11px] flex gap-3 items-start">
+                    <div className="absolute -left-[5px] w-2 h-2 rounded-full bg-accent" />
+                    <span className="text-slate-500 font-mono">INITIAL</span>
+                    <span className="text-slate-200">Calcul initial → {audit.hopital_choisi_name || "Lieu optimal"}</span>
+                </div>
+                {audit.recalculs && audit.recalculs.map((r, i) => (
+                    <div key={i} className="text-[11px] flex gap-3 items-start">
+                        <div className="absolute -left-[5px] w-2 h-2 rounded-full bg-primary" />
+                        <span className="text-slate-500 font-mono">{r.at_time}</span>
+                        <span className="text-slate-300">
+                            {r.raison} → {r.nouvel_hopital}
+                            {r.destination_changee && <span className="text-accent ml-2">⚠️ CHANGEMENT</span>}
                         </span>
                     </div>
                 ))}
             </div>
 
-            <div className="mt-4 flex justify-between text-[10px] text-slate-500">
+            <p className="text-xs text-slate-300 italic mb-4">"{audit.raison_choix}"</p>
+
+            <div className="text-[10px] text-slate-400 mb-3 flex items-center gap-1 uppercase tracking-wide">
+                <Navigation size={10} className="text-primary" /> Départ: <span className="text-slate-200 font-bold">{audit.depart_nom || "Position inconnue"}</span>
+            </div>
+
+            <div className="mt-4 flex justify-between text-[10px] text-slate-500 border-t border-slate-800 pt-4">
                 <span>Nœuds explorés: {audit.nb_noeuds_explores}</span>
                 <span>Calcul: {audit.temps_calcul_ms}ms</span>
             </div>
         </div>
     );
 };
+

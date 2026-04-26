@@ -65,6 +65,16 @@ function App() {
     }
   };
 
+  const handleInjectBlockage = async () => {
+    try {
+      await routingService.injectBlockage();
+      loadHospitals(); // Just to trigger a refresh and see traffic status if implemented
+      if (startPoint) calculateRoute(); // Recalculate immediately for demo
+    } catch (err) {
+      console.error("Injection failed", err);
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Sidebar Left: Inputs and Results */}
@@ -86,7 +96,15 @@ function App() {
           loading={loading}
         />
 
+        <button
+          onClick={handleInjectBlockage}
+          className="mt-4 w-full border border-yellow-500/30 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-500 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-all"
+        >
+          ⚡ Injecter Embouteillage (Demo)
+        </button>
+
         {error && (
+
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mt-4 flex items-start gap-3">
             <AlertTriangle className="shrink-0" size={18} />
             <span className="text-sm font-medium">{error}</span>

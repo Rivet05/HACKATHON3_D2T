@@ -7,7 +7,8 @@ class Hospital(models.Model):
     urgences_disponibles = models.BooleanField(default=True)
     specialites = models.JSONField(default=list)
     temps_attente_min = models.IntegerField(default=0)
-    node_id = models.CharField(max_length=100)  # ID du nœud OSM le plus proche
+    node_id = models.CharField(max_length=100) 
+    last_status_update = models.DateTimeField(auto_now=True) # Nouveau pour Twist 02
 
     def __str__(self):
         return self.name
@@ -24,6 +25,11 @@ class RouteAuditLog(models.Model):
     nb_noeuds_explores = models.IntegerField()
     temps_calcul_ms = models.IntegerField()
     path_geojson = models.JSONField()
+    
+    # Nouveaux champs Twist 02
+    fraicheur_donnees = models.JSONField(default=dict)
+    recalculs = models.JSONField(default=list)
+    destination_changee = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Audit {self.timestamp} - {self.hopital_choisi}"
