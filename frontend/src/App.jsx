@@ -134,7 +134,7 @@ function App() {
 
         {/* Vehicle Selection */}
         <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mb-6">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Profil de Secours </label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Profil de Secours</label>
           <div className="grid grid-cols-3 gap-2">
             {[
               { id: 'ambulance', label: 'Ambi', icon: '🚑' },
