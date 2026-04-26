@@ -138,29 +138,39 @@ class GraphBuilder:
         return self._graph
 
     def _merge_synthetic_ids(self, G, elements):
-        """Map synthetic road_ids to nearest edges in our detailed graph"""
-        # We find coords of synthetic nodes to locate where ways are
+        """Map synthetic road_ids to nearest edges in our detailed graph using higher precision"""
         nodes_map = {str(el['id']): (el['lat'], el.get('lon') or el.get('lng')) for el in elements if el['type'] == 'node'}
         
+        matches = 0
+        total_ways = 0
         for el in elements:
             if el['type'] == 'way':
+                total_ways += 1
                 way_id = str(el['id'])
                 node_ids = [str(nid) for nid in el.get('nodes', [])]
-                if len(node_ids) < 2: continue
                 
-                # Find the center point of this synthetic segment
-                mid_node = node_ids[len(node_ids)//2]
-                if mid_node in nodes_map:
-                    lat, lon = nodes_map[mid_node]
-                    # Find nearest node in our detailed graph
-                    target_u = self.find_nearest_node(lat, lon)
-                    # Find edges connected to this node and tag them
-                    if target_u in G:
-                        for neighbor in G[target_u]:
-                            G[target_u][neighbor]['segment_id'] = way_id
-                        # Also tag incoming
-                        for prev in G.predecessors(target_u):
-                            G[prev][target_u]['segment_id'] = way_id
+                # For each node in the synthetic way, find the closest edges in our real graph
+                # and tag them with this competition way_id
+                tagged_count = 0
+                for nid in node_ids:
+                    if nid not in nodes_map: continue
+                    lat, lon = nodes_map[nid]
+                    
+                    # Search around this point (find multiple nearest nodes to cover intersections)
+                    near_nodes = self.find_nearest_nodes(lat, lon, k=3)
+                    for u in near_nodes:
+                        if u in G:
+                            # Tag all incident edges
+                            for v in G[u]:
+                                G[u][v]['segment_id'] = way_id
+                                tagged_count += 1
+                            for p in G.predecessors(u):
+                                G[p][u]['segment_id'] = way_id
+                                tagged_count += 1
+                if tagged_count > 0:
+                    matches += 1
+        
+        print(f"Hybrid Sync: {matches}/{total_ways} official ways successfully bound to real geometry.")
 
     def _prepare_spatial_index(self):
         import numpy as np
