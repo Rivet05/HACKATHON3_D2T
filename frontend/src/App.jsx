@@ -67,13 +67,17 @@ function App() {
 
   const handleInjectBlockage = async () => {
     try {
-      await routingService.injectBlockage();
-      loadHospitals(); // Just to trigger a refresh and see traffic status if implemented
-      if (startPoint) calculateRoute(); // Recalculate immediately for demo
+      await routingService.injectBlockage({
+        lat: startPoint[0],
+        lng: startPoint[1]
+      });
+      loadHospitals();
+      if (startPoint) calculateRoute();
     } catch (err) {
       console.error("Injection failed", err);
     }
   };
+
 
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">

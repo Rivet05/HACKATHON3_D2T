@@ -25,7 +25,7 @@ class RouteCalculationView(APIView):
         
         # Twist 02: Support for exact start time
         now = timezone.now()
-        hour = int(request.data.get('hour', now.hour))
+        hour = int(request.data.get('hour') or request.data.get('heure') or now.hour)
         minute = int(request.data.get('minute', now.minute))
         
         engine = RoutingEngine()
@@ -97,25 +97,49 @@ class InjectBlockageView(APIView):
         import random
         from .services.graph_builder import GraphBuilder
         cache = TrafficCache.get_instance()
-        G = GraphBuilder.get_instance().get_graph()
+        builder = GraphBuilder.get_instance()
+        G = builder.get_graph()
         
-        # Pick a random segment from the graph
-        edges = list(G.edges(data=True))
-        if not edges:
-            return Response({"error": "Graphe vide"}, status=400)
+        # Twist 02 Demo: Block near the departure if provided
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        
+        target_ids = []
+        if lat and lng:
+            # Block nodes/edges within roughly 500m
+            # Very simple bounding box filter for speed
+            for u, v, data in G.edges(data=True):
+                node_data = G.nodes[u]
+                if 'lat' in node_data:
+                    dist = builder.haversine(float(lat), float(lng), node_data['lat'], node_data['lng'])
+                    if dist < 2000: # 2 Kilometers radius
+                        target_ids.append(data.get('segment_id'))
+
+        
+        # Fallback to random if no lat/lng or no segments found
+        if not target_ids:
+            edges = list(G.edges(data=True))
+            selected = random.sample(edges, min(20, len(edges)))
+            target_ids = [d.get('segment_id') for u, v, d in selected]
             
-        u, v, data = random.choice(edges)
-        seg_id = data.get('segment_id')
+        now = timezone.now()
         
-        now = datetime.now()
-        slot = (now.hour * 12) + (now.minute // 5)
+        blocked_count = 0
+        for sid in target_ids:
+            if sid:
+                # Twist 02: Block for ALL slots of the day to be sure
+                for s in range(288):
+                    cache.update_segment(sid, s, 999.0)
+                blocked_count += 1
         
-        cache.update_segment(seg_id, slot, 999.0)
         cache.smooth_fifo()
         
         return Response({
-            "message": "Blocage injecté",
-            "segment_id": seg_id,
-            "slot": slot
+            "message": f"DÉMO: {blocked_count} segments murés pour 24h",
+            "blocked_count": blocked_count
         })
+
+
+
+
 

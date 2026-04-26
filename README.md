@@ -15,6 +15,25 @@ L'algorithme ne cherche pas un chemin vers *un* hôpital, mais vers le meilleur 
 - **Bypass d'Urgence** : Le moteur autorise les ambulances à braver les sens uniques en cas d'isolement complet, en appliquant une pénalité de coût massive (x20) pour forcer la préférence au sens légal.
 - **Connectivité Résiliente** : Indexation spatiale arrondissant les coordonnées à 7 décimales pour "recoller" les segments de route OpenStreetMap défectueux.
 
+## 🚀 ÉTAT DU PROJET : TWIST 02 - TEMPORALITÉ ET RÉSILIENCE (VALIDÉ ✅)
+
+Le moteur d'urgence est désormais capable de naviguer dans un environnement urbain hostile et dynamique.
+
+### 🧠 Innovations Techniques (Twist 02)
+*   **Moteur TD-A* (Time-Dependent A*)** : Calcul dynamique du coût des arêtes basé sur l'heure d'arrivée estimée. Le chemin s'adapte à la "vague" de trafic prévue à Yaoundé.
+*   **Traffic Cache (5-min slots)** : Gestion de 288 profils de trafic journaliers avec lissage mathématique FIFO (First-In-First-Out) pour l'optimalité du routage.
+*   **Résilience Spatiale (Stress Test)** : Capacité d'injecter des "murs" de trafic (Rayon de 2km) provoquant un déroutement proactif massif et instantané.
+*   **UI Dynamic Feedback** : Indicateur de fraîcheur des données en temps réel et timeline d'audit enrichie pour suivre les recalculs d'itinéraire.
+
+### 🛠️ Démonstration du Twist 02
+1.  **Démarrage** : Lancer le simulateur de flux (`python3 manage.py simulate_traffic`).
+2.  **Injection de Crise** : Utiliser le bouton "⚡ Injecter Embouteillage". Le système paralyse la zone autour du départ et force l'A* à trouver une issue alternative, visible immédiatement sur la carte.
+3.  **Traçabilité** : Vérifier les logs `!!! ENGINE DETECTED BLOCKAGE !!!` prouvant que l'IA a "senti" l'obstacle et l'a contourné.
+
+---
+*Prochaine étape : TWIST 03 — Convergence Multi-Source & Modèles d'Incertitude.*
+
+
 ### 3. Performance & Indexation Spatiale
 - **Indexation Vectorisée (Numpy)** : Recherche du nœud le plus proche en $O(log N)$ via des opérations matricielles. Capable de gérer le graphe de Yaoundé (> 1M de segments) sans latence au clic.
 - **Stratégie Multi-Point** : Si le point de clic est une impasse isolée, le système tente automatiquement les 5 nœuds adjacents les plus proches pour garantir un routage vers le réseau principal.

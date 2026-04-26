@@ -56,11 +56,13 @@ class TrafficCache:
                     self._fifo_violations += 1
 
     def update_segment(self, road_id, slot_idx, multiplier):
-        if road_id in self._slots:
-            self._slots[road_id][slot_idx] = multiplier
-            self._last_update[road_id] = time.time()
-            # On ne lisse pas à chaque update atomique pour la perf, 
-            # mais on pourrait le faire périodiquement.
+        road_id = str(road_id)
+        if road_id not in self._slots:
+            self._slots[road_id] = [1.0] * 288
+            
+        self._slots[road_id][slot_idx] = multiplier
+        self._last_update[road_id] = time.time()
+
 
     def get_multiplier(self, road_id, time_mins):
         slot_idx = int((time_mins % 1440) / 5)
@@ -69,7 +71,11 @@ class TrafficCache:
         if road_id not in self._slots:
             return 1.0
             
-        return self._slots[road_id][slot_idx]
+        multiplier = self._slots[road_id][slot_idx]
+        if multiplier >= 99.0:
+            print(f"!!! ENGINE DETECTED BLOCKAGE ON {road_id} !!!")
+        return multiplier
+
 
     def get_stats(self):
         now = time.time()

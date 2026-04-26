@@ -25,12 +25,21 @@ class RoutingEngine:
         self.traffic_cache = TrafficCache.get_instance()
 
     def get_location_name(self, lat, lng):
-        if lat > 3.87:
-            return "Etoudi / Bastos" if lng > 11.51 else "Bastos / Golf"
-        elif lat > 3.84:
-            return "Centre-Ville / Messa" if lng > 11.51 else "Mokolo / Madagascar"
-        else:
-            return "Mvan / Ekounou" if lng > 11.51 else "Biyem-Assi / Mendong"
+        # Affinement des quartiers de Yaoundé
+        if lat > 3.90: return "Messassi / Olembé"
+        if lat > 3.88:
+            if lng > 11.52: return "Bastos"
+            return "Etoudi"
+        if lat > 3.86:
+            if lng > 11.53: return "Nlongkak"
+            if lng > 11.51: return "Centre-Ville"
+            return "Mokolo"
+        if lat > 3.84:
+            if lng > 11.52: return "Mimboman / Kondengui"
+            if lng > 11.50: return "Biyem-Assi"
+            return "Mendong"
+        return "Mvan / Ahala"
+
 
     def get_edge_cost(self, u, v, data, now_mins):
         dist_m = data.get('distance_m', 1000)
@@ -52,7 +61,8 @@ class RoutingEngine:
         
         # Extreme blockage injection (Twist 02)
         if traffic_mult >= 99.0:
-            return 9999.0 # Effectively blocked
+            print(f"DEBUG: Segment {seg_id} BLOCKED! Rerouting...")
+            return 1000000.0 # Effectively a wall
             
         penalite_type = self.PENALITE_TYPE.get(road_type, 1.2)
         wrong_way_mult = 20.0 if data.get('is_wrong_way') else 1.0
