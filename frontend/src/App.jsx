@@ -21,6 +21,13 @@ function App() {
   const [activeMissions, setActiveMissions] = useState([]);
 
   const [isOffline, setIsOffline] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
 
   const handleNetworkCut = async () => {
     try {
@@ -254,7 +261,7 @@ function App() {
                   lng: startPoint[1],
                   current_route_segments: routeResult.segment_ids
                 });
-                alert("Système routier saboté !");
+                showToast("DANGER : Système routier saboté !", "error");
               }
             }}
             disabled={!routeResult}
@@ -311,7 +318,7 @@ function App() {
             setIsContaminated(false);
             setIntegrityReason(null);
             loadHospitals();
-            alert("Système réinitialisé.");
+            showToast("Système réinitialisé avec succès.", "success");
           }}
           className="w-full text-slate-500 hover:text-white text-[10px] font-bold tracking-widest transition-colors mb-6"
         >
@@ -387,8 +394,20 @@ function App() {
       <div className="w-[300px] border-l border-slate-800 bg-slate-900/50 flex flex-col p-4 z-10 custom-scrollbar overflow-y-auto">
         <HospitalPanel hospitals={hospitals} onToggle={handleToggleHospital} />
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-8 right-8 z-[2000] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-300 ${toast.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-500' :
+          toast.type === 'success' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
+            'bg-indigo-500/20 border-indigo-500/50 text-indigo-400'
+          }`}>
+          {toast.type === 'error' ? <AlertTriangle size={20} /> : <ShieldAlert size={20} />}
+          <span className="font-bold text-sm tracking-tight">{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }
+
 
 export default App;
