@@ -90,19 +90,30 @@ class TrafficCache:
         slot_idx = int((time_mins % 1440) / 5)
         road_id = str(road_id)
         
+        # Twist 10: The Destructive Temporal Dependency
+        # When offline, the system's "current time" begins to drift or freeze
+        # as it loses its reference to a synchronized central clock.
+        real_time_mins = time_mins
+        if cls._is_offline and cls._cut_time:
+            now = time.time()
+            offline_sec = now - cls._cut_time
+            # After 1 min of isolation, the system's internal clock 
+            # starts to "lag" behind reality by 50%.
+            # It's routing for 8:05 when it's actually 8:10.
+            drift_sec = offline_sec * 0.5 
+            real_time_mins = time_mins - (drift_sec / 60.0)
+            slot_idx = int((real_time_mins % 1440) / 5)
+
         mult = 1.0
         if road_id in cls._slots:
             mult = cls._slots[road_id][slot_idx]
             
-        # Twist 10: Contamination by Isolation
-        # If we are offline, the uncertainty grows. We assume traffic worsens
-        # by 5% every minute of network isolation to be prudent.
+        # Contamination: The longer we are offline, the more we add 
+        # a "Chaos Factor" because the internal model is drifting.
         if cls._is_offline and cls._cut_time:
-            now = time.time()
             offline_duration_min = (now - cls._cut_time) / 60
-            # Progressive penalty: mult * (1 + 0.05 * minutes)
-            staleness_penalty = 1.0 + (offline_duration_min * 0.05)
-            mult *= staleness_penalty
+            chaos_factor = 1.0 + (offline_duration_min * 0.08)
+            mult *= chaos_factor
             
         return mult
 

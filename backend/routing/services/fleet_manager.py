@@ -18,9 +18,15 @@ class FleetManager:
         return True
 
     def get_available_count(self):
-        # Clean up finished missions
+        # Clean up finished missions ONLY if network is online
+        # Twist 10: In isolation, we lose the 'Mission Accomplished' signals
+        from .traffic_cache import TrafficCache
+        is_offline = TrafficCache.get_instance()._is_offline
+        
         now = time.time()
-        self._active_missions = [m for m in self._active_missions if m > now]
+        if not is_offline:
+            self._active_missions = [m for m in self._active_missions if m > now]
+            
         return max(0, self._max_vehicles - len(self._active_missions))
 
     def reset(self):
