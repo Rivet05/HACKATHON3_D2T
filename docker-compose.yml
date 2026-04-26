@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: emergency-backend
+    volumes:
+      - ./backend/db.sqlite3:/app/db.sqlite3
+      - ./backend/data:/app/data
+    ports:
+      - "8021:8000"
+    environment:
+      - DEBUG=False
+      - ALLOWED_HOSTS=api.geodtt.negou.tech,localhost,127.0.0.1
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: emergency-frontend
+    ports:
+      - "3021:80"
+    restart: always

@@ -23,9 +23,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-q7zz+766y^v&6$&y7t^n^+1g7rrgbc%1nq7m+f5(jr!5!$yb^f'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+import os
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['api.geodtt.negou.tech', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -126,5 +127,6 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [
+    "https://geodtt.negou.tech",
     "http://localhost:5173",
 ]
