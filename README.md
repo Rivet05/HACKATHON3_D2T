@@ -15,24 +15,26 @@ L'algorithme ne cherche pas un chemin vers *un* hôpital, mais vers le meilleur 
 - **Bypass d'Urgence** : Le moteur autorise les ambulances à braver les sens uniques en cas d'isolement complet, en appliquant une pénalité de coût massive (x20) pour forcer la préférence au sens légal.
 - **Connectivité Résiliente** : Indexation spatiale arrondissant les coordonnées à 7 décimales pour "recoller" les segments de route OpenStreetMap défectueux.
 
-## 🚀 ÉTAT DU PROJET : TWIST 03 - PROFILS ET CONTRAINTES (VALIDÉ ✅)
+## 🚀 ÉTAT DU PROJET : TWIST 04 - SURVEILLANCE ACTIVE (VALIDÉ ✅)
 
-Le système est passé du statut de "GPS" à celui de **Superviseur de Flotte d'Urgence**.
+Le système est maintenant capable de détecter des menaces invisibles et d'agir de manière proactive par **auto-correction**.
 
-### 🧠 Innovations Techniques (Twist 03)
-*   **Routage Polymorphe** : Un seul clic change radicalement le graphe sous-jacent.
-    *   **🚒 Pompier** : Heuristique de gabarit (pénalité massive sur `residential` pour forcer les artères principales).
-    *   **🚑 Ambulance** : Maximisation de l'agilité urbaine pour les raccourcis critiques.
-    *   **🚓 Police** : Priorité maximale et vitesse accrue sur les axes majeurs.
-*   **Modèle Météo-Sensible** : Intégration de la variable `rain` impactant le freinage et la vitesse de croisière selon le poids du véhicule (Inertie simulée).
-*   **Pontage d'Identifiants (Bridge)** : Algorithme capable de mapper des données de trafic hétérogènes (numériques) sur un graphe OSM (`way/ID`) via une heuristique par type de route.
+### 🧠 Innovations Techniques (Twist 04)
+*   **Active Route Polling** : Chaque seconde, le Frontend interroge le Backend pour vérifier l'intégrité de l'itinéraire en cours face aux nouvelles données (Twist 02 + 04).
+*   **Contamination Detection** : Détecte si un événement local (fermeture de segment à 2km devant) contamine la validité globale de la mission.
+*   **Auto-Recalcul (Event-Driven)** : Dès qu'une rupture d'intégrité est détectée, le système déclenche une redirection automatique sans intervention humaine.
+*   **Feedback d'Urgence UI** : Bannière clignotante et alertes visuelles pour prévenir l'opérateur du changement de cap de l'ambulance.
 
-### 🛠️ Démonstration du Twist 03
-1.  **Comparaison** : Calculer un trajet en **Ambulance**, puis basculer en **Pompier**. Observer le détour automatique par les grands boulevards de Yaoundé.
-2.  **Reset Global** : Utiliser le bouton vert **"♻️ Reset"** pour restaurer la fluidité totale de la ville après une phase de sabotage.
+### 🛠️ Démonstration du Twist 04 (Le "Wow" Final)
+1.  **Mission en cours** : Lancer un calcul de route vers l'Hôpital Central.
+2.  **Imprévu** : Cliquer sur **"⚡ Sabotage"** (Simulation de fermeture de route brutale pendant l'intervention).
+3.  **Réaction Passive** : Le système attend son prochain cycle de surveillance (Pulse de 3s).
+4.  **Détection** : La bannière rouge **"ALERTE OBSTACLE"** apparaît, prouvant que le système a détecté la contamination de l'itinéraire.
+5.  **Auto-Correction** : Le tracé se met à jour automatiquement après 2 secondes pour proposer une voie de sortie.
 
 ---
-*Build final pour Hackverse 3 — Équipe D2T — Yaoundé 2024*
+*Build TERMINÉ — Hackverse 3 — Équipe D2T — Yaoundé — Victoire par KO Technique*
+
 
 
 

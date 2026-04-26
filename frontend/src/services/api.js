@@ -13,6 +13,7 @@ export const routingService = {
     getAuditLogs: () => api.get('/audit/'),
     injectBlockage: (data) => api.post('/traffic/inject_blockage/', data),
     resetTraffic: () => api.post('/traffic/reset/'),
+    checkIntegrity: (data) => api.post('/route/integrity/', data),
 };
 
 export default api;

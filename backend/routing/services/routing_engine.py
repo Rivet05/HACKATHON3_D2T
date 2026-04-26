@@ -49,41 +49,32 @@ class RoutingEngine:
         a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
         return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-    def get_edge_cost(self, u, v, data, now_mins, vehicle_type='ambulance'):
+    def get_edge_cost(self, u, v, data, now_mins, vehicle_type='ambulance', is_counter_flow=False):
         dist_m = data.get('distance_m', 1000)
         road_type = data.get('road_type', 'residential')
         seg_id = data.get('segment_id')
         
-        # Twist 03: Profile-based passability
-        # Check explicit ID match first
         if not self.traffic_cache.is_passable(seg_id, now_mins, vehicle_type):
             return 1000000.0
             
-        # BRIDGE ID GAP: If no explicit ID match, use road_type heuristics
-        profile_mult = 1.0
-        if vehicle_type == 'fire':
-            if road_type in ['residential', 'living_street', 'service']:
-                profile_mult = 5.0 # Narrow street penalty for big trucks
-            elif road_type in ['primary', 'trunk']:
-                profile_mult = 0.8 # Trucks are faster/prefer main roads
-
+        # Twist 04 & 05 Survival: Never return infinity for blockages, just very high cost
         traffic_mult = self.traffic_cache.get_multiplier(seg_id, now_mins)
         if traffic_mult >= 99.0:
-            return 1000000.0
+            traffic_mult = 500.0 # High cost but not infinite
             
         penalite_type = self.PENALITE_TYPE.get(road_type, 1.2)
-        wrong_way_mult = 20.0 if data.get('is_wrong_way') else 1.0
         
-        # Weather impact
+        # Twist 05 Simulation: Sens interdit autorisé avec pénalité massive (x50) pour survie
+        wrong_way_mult = 50.0 if is_counter_flow else (20.0 if data.get('is_wrong_way') else 1.0)
+        
         weather_mult = 1.0
         if self.traffic_cache.is_raining(seg_id, now_mins):
             weather_mult = 1.5 if vehicle_type == 'fire' else 1.2
 
         base_speed = 50 / 3.6
         if road_type in ['trunk', 'primary']: base_speed = 70 / 3.6
-        if road_type == 'residential': base_speed = 30 / 3.6
         
-        real_speed = base_speed / (traffic_mult * penalite_type * wrong_way_mult * weather_mult * profile_mult)
+        real_speed = base_speed / (traffic_mult * penalite_type * wrong_way_mult * weather_mult)
         return dist_m / max(real_speed, 1.0)
 
     def find_route(self, lat, lng, eligible_hospitals, hour, minute, vehicle_type='ambulance'):
@@ -111,7 +102,6 @@ class RoutingEngine:
             h_node = self.graph_builder.find_nearest_node(h.lat, h.lng)
             G.add_edge(h_node, target_node, weight=h.temps_attente_min * 60, is_virtual=True, hospital_id=h.id)
 
-        # A* Search
         queue = [(0, 0, start_node, [])]
         visited = {}
         found_path = None
@@ -130,6 +120,7 @@ class RoutingEngine:
             visited[current_node] = current_cost
             
             if current_node in G:
+                # 1. Explorations légales (Successors)
                 for neighbor, edge_data in G[current_node].items():
                     arrival_time_mins = base_time_mins + (current_cost / 60.0)
                     if edge_data.get('is_virtual'):
@@ -137,25 +128,44 @@ class RoutingEngine:
                     else:
                         edge_cost = self.get_edge_cost(current_node, neighbor, edge_data, arrival_time_mins, vehicle_type)
                     
-                    if edge_cost >= 1000000.0: continue
+                    if edge_cost < 1000000.0:
+                        new_cost = current_cost + edge_cost
+                        h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.50) / (70/3.6)
+                        heapq.heappush(queue, (new_cost + h_val, new_cost, neighbor, path + [current_node]))
+
+                # 2. Bypass d'urgence (Predecessors = Counter-flow)
+                for neighbor in G.predecessors(current_node):
+                    if neighbor in G[current_node]: continue
+                    edge_data = G.get_edge_data(neighbor, current_node)
+                    arrival_time_mins = base_time_mins + (current_cost / 60.0)
+                    edge_cost = self.get_edge_cost(neighbor, current_node, edge_data, arrival_time_mins, vehicle_type, is_counter_flow=True)
                     
-                    new_cost = current_cost + edge_cost
-                    # Heuristic: approx distance to center (fixed point for hackathon simplicity)
-                    h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.50) / (70/3.6)
-                    heapq.heappush(queue, (new_cost + h_val, new_cost, neighbor, path + [current_node]))
+                    if edge_cost < 1000000.0:
+                        new_cost = current_cost + edge_cost
+                        h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.50) / (70/3.6)
+                        heapq.heappush(queue, (new_cost + h_val, new_cost, neighbor, path + [current_node]))
 
         duration_ms = int((time.time() - start_calc_time) * 1000)
         
         if found_path:
-            h_node = found_path[-2]
-            edge_data = G.get_edge_data(h_node, target_node)
-            chosen_hospital_id = edge_data.get('hospital_id')
-            
             coords_path = []
+            segment_ids = []
             for node_id in found_path:
                 if node_id in G and 'lat' in G.nodes[node_id]:
                     coords_path.append([G.nodes[node_id]['lat'], G.nodes[node_id]['lng']])
             
-            return coords_path, chosen_hospital_id, final_cost / 60.0, nodes_explored, duration_ms, location_name
+            # Extract segment IDs
+            for i in range(len(found_path)-1):
+                u, v = found_path[i], found_path[i+1]
+                edge_data = G.get_edge_data(u, v) or G.get_edge_data(v, u) # Fallback for counter-flow
+                if edge_data and 'segment_id' in edge_data:
+                    segment_ids.append(edge_data['segment_id'])
             
-        return None, 0, 0, 0, 0, location_name
+            # Find chosen hospital
+            h_node = found_path[-2]
+            edge_to_target = G.get_edge_data(h_node, target_node)
+            hospital_id = edge_to_target.get('hospital_id') if edge_to_target else None
+
+            return coords_path, hospital_id, final_cost / 60.0, nodes_explored, duration_ms, location_name, segment_ids
+            
+        return None, None, 0, 0, 0, location_name, []

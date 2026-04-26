@@ -14,12 +14,30 @@ function App() {
   const [routeResult, setRouteResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isContaminated, setIsContaminated] = useState(false);
 
   useEffect(() => {
     loadHospitals();
     const interval = setInterval(loadHospitals, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!routeResult || !routeResult.segment_ids || routeResult.is_recovery_path) return;
+    const monitor = setInterval(async () => {
+      try {
+        const res = await routingService.checkIntegrity({
+          segment_ids: routeResult.segment_ids,
+          vehicle_type: vehicleType
+        });
+        if (!res.data.is_valid && !isContaminated) {
+          setIsContaminated(true);
+          setTimeout(() => { calculateRoute(); setIsContaminated(false); }, 2000);
+        }
+      } catch (err) { }
+    }, 3000);
+    return () => clearInterval(monitor);
+  }, [routeResult, vehicleType, isContaminated]);
 
   const loadHospitals = async () => {
     try {
@@ -70,10 +88,11 @@ function App() {
     try {
       await routingService.injectBlockage({
         lat: startPoint[0],
-        lng: startPoint[1]
+        lng: startPoint[1],
+        current_route_segments: routeResult?.segment_ids || []
       });
       loadHospitals();
-      if (startPoint) calculateRoute();
+      // On retire calculateRoute() d'ici pour laisser le Pulse (Twist 04) agir
     } catch (err) {
       console.error("Injection failed", err);
     }
@@ -116,8 +135,8 @@ function App() {
                 key={v.id}
                 onClick={() => setVehicleType(v.id)}
                 className={`flex flex-col items-center p-3 rounded-xl border transition-all ${vehicleType === v.id
-                    ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400 scale-105 shadow-lg shadow-indigo-500/20'
-                    : 'bg-slate-900/50 border-white/5 text-slate-400 hover:border-white/20'
+                  ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400 scale-105 shadow-lg shadow-indigo-500/20'
+                  : 'bg-slate-900/50 border-white/5 text-slate-400 hover:border-white/20'
                   }`}
               >
                 <span className="text-2xl mb-1">{v.icon}</span>
@@ -133,6 +152,23 @@ function App() {
           onCalculate={calculateRoute}
           loading={loading}
         />
+
+        {(isContaminated || routeResult?.is_recovery_path) && (
+          <div className={`border p-4 rounded-xl mt-4 flex items-center gap-3 shadow-lg ${routeResult?.is_recovery_path ? 'bg-amber-600 border-amber-500' : 'bg-red-600 border-red-500 animate-pulse'
+            } text-white`}>
+            <AlertTriangle className="shrink-0" size={20} />
+            <div className="flex flex-col">
+              <span className="text-xs font-black uppercase tracking-widest">
+                {routeResult?.is_recovery_path ? 'Mode Dégradé / Survie' : 'Alerte Obstacle'}
+              </span>
+              <span className="text-[10px] font-bold opacity-80">
+                {routeResult?.is_recovery_path
+                  ? 'Trajet forcé à travers les blocages (Dernier recours)'
+                  : 'Trajet compromis, recalcul en cours...'}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 mt-4">
           <button

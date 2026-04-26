@@ -40,12 +40,16 @@ class RouteCalculationView(APIView):
             eligible = eligible.filter(specialites__contains='trauma')
         
         # Twist 02: TD-Algorithm
-        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name = engine.find_route(lat, lng, eligible, hour, minute, vehicle_type=vehicle_type)
+        # Twist 04: Return segment_ids
+        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name, segment_ids = engine.find_route(
+            lat, lng, eligible, hour, minute, vehicle_type=vehicle_type
+        )
         
         if not path:
             return Response({"error": "Impossible de trouver un chemin"}, status=404)
         
-        # Decision metadata
+        # ... Decision metadata ...
+        now = timezone.now()
         hopital = Hospital.objects.get(id=hospital_id)
         hospital_data = [{
             "id": h.id, 
@@ -54,29 +58,31 @@ class RouteCalculationView(APIView):
             "status_age_sec": (now - h.last_status_update).total_seconds()
         } for h in eligible]
         
-        # Twist 02: Freshness stats
-        traffic_stats = cache.get_stats()
-        
         # Audit Log (Twist 01 + 02)
+        # Check if this route is a 'degraded' one (contains forced blockages)
+        contains_recovery = any(cache.get_multiplier(sid, now.hour * 60 + now.minute) >= 99.0 for sid in segment_ids)
+        
         audit = RouteAuditLog.objects.create(
             depart_lat=lat,
             depart_lng=lng,
             depart_nom=location_name,
             hopital_choisi=hopital,
             hopitaux_consideres=hospital_data,
-            raison_choix=f"Optimisation temps total ({total_cost:.1f}min) incluant attente ({hopital.temps_attente_min}min)",
+            raison_choix=f"Optimisation avec survie ({total_cost:.1f}min). " + ("(MODE DÉGRADÉ)" if contains_recovery else ""),
             eta_minutes=total_cost,
             nb_noeuds_explores=nodes_explored,
             temps_calcul_ms=duration_ms,
             path_geojson={"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[c[1], c[0]] for c in path]}},
-            fraicheur_donnees=traffic_stats
+            fraicheur_donnees=cache.get_stats()
         )
         
-        # Return full audit for UI (Hackathon speed)
         audit_data = RouteAuditLogSerializer(audit).data
         
+        # Return result with segment_ids for Twist 04 monitoring
         return Response({
             "path": path,
+            "segment_ids": segment_ids,
+            "is_recovery_path": contains_recovery,
             "hospital": {
                 "id": hopital.id,
                 "name": hopital.name,
@@ -87,8 +93,37 @@ class RouteCalculationView(APIView):
             "eta": round(total_cost, 1),
             "audit": audit_data,
             "location_name": location_name,
-            "traffic_stats": traffic_stats
         })
+
+class RouteIntegrityView(APIView):
+    def post(self, request):
+        segment_ids = request.data.get('segment_ids', [])
+        vehicle_type = request.data.get('vehicle_type', 'ambulance')
+        
+        cache = TrafficCache.get_instance()
+        now_mins = timezone.now().hour * 60 + timezone.now().minute
+        
+        blocked_segments = []
+        print(f"DEBUG TWIST 04: Checking {len(segment_ids)} segments. First ones: {segment_ids[:5]}...")
+        for sid in segment_ids:
+            mult = cache.get_multiplier(sid, now_mins)
+            if mult >= 99.0:
+                print(f"!!! DETECTED BLOCKED SEGMENT: {sid} (mult={mult}) !!!")
+                blocked_segments.append(sid)
+        
+        if not blocked_segments:
+            print("DEBUG TWIST 04: All segments valid. No alert triggered.")
+        
+        return Response({
+            "is_valid": len(blocked_segments) == 0,
+            "blocked_count": len(blocked_segments),
+            "blocked_segments": blocked_segments
+        })
+
+class TrafficResetView(APIView):
+    def post(self, request):
+        TrafficCache.get_instance().reset_traffic()
+        return Response({"message": "Réseau fluide rétabli !"})
 
 
 class AuditLogListView(generics.ListAPIView):
@@ -107,42 +142,39 @@ class InjectBlockageView(APIView):
         lat = request.data.get('lat')
         lng = request.data.get('lng')
         
+        # Twist 04: Block segments further along the path (10-15) to allow for detours
         target_ids = []
+        path_segments = request.data.get('current_route_segments', [])
+        if len(path_segments) > 15:
+            for sid in path_segments[10:15]:
+                target_ids.append(sid)
+        elif path_segments:
+            # Fallback if path is short
+            target_ids.append(path_segments[-1])
+
         if lat and lng:
             for u, v, data in G.edges(data=True):
                 node_data = G.nodes[u]
                 if 'lat' in node_data:
                     dist = builder.haversine(float(lat), float(lng), node_data['lat'], node_data['lng'])
-                    if dist < 500: # Rayon raisonnable
+                    if dist < 400:
                         target_ids.append(data.get('segment_id'))
         
-        # Fallback to random if no segments found near coordinates
-        if not target_ids:
-            edges = list(G.edges(data=True))
-            selected = random.sample(edges, min(10, len(edges)))
-            target_ids = [d.get('segment_id') for u, v, d in selected]
+        # 10 segments aléatoires
+        edges = list(G.edges(data=True))
+        selected = random.sample(edges, min(10, len(edges)))
+        target_ids.extend([d.get('segment_id') for u, v, d in selected])
 
         blocked_count = 0
         for sid in target_ids:
             if sid:
                 now = timezone.now()
                 slot = (now.hour * 12) + (now.minute // 5)
-                # Block for 2 hours (24 slots)
                 for s in range(slot, min(288, slot + 24)):
                     cache.update_segment(sid, s, 999.0)
                 blocked_count += 1
         
-        cache.smooth_fifo()
-        
-        return Response({
-            "message": f"DÉMO: {blocked_count} segments bloqués (Rayon 500m)",
-            "blocked_count": blocked_count
-        })
-
-class TrafficResetView(APIView):
-    def post(self, request):
-        TrafficCache.get_instance().reset_traffic()
-        return Response({"message": "Réseau fluide rétabli !"})
+        return Response({"message": f"Sabotage réussi : {blocked_count} segments impactés."})
 
 
 
