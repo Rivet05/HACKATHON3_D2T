@@ -34,10 +34,15 @@ class RouteCalculationView(APIView):
         engine = RoutingEngine()
         cache = TrafficCache.get_instance()
         
-        # Filter hospitals by specialty (Twist 01 logic)
-        eligible = Hospital.objects.filter(urgences_disponibles=True)
+        # Filter hospitals by specialty (Python-side filtering for SQL compatibility)
+        all_eligible = Hospital.objects.filter(urgences_disponibles=True)
         if urgence_type == 'trauma':
-            eligible = eligible.filter(specialites__contains='trauma')
+            eligible = [h for h in all_eligible if 'trauma' in (h.specialites or [])]
+        else:
+            eligible = list(all_eligible)
+        
+        if not eligible:
+            return Response({"error": "Aucun hôpital disponible pour ce type d'urgence"}, status=404)
         
         # Twist 02: TD-Algorithm
         # Twist 04: Return segment_ids
@@ -98,27 +103,57 @@ class RouteCalculationView(APIView):
 class RouteIntegrityView(APIView):
     def post(self, request):
         segment_ids = request.data.get('segment_ids', [])
-        vehicle_type = request.data.get('vehicle_type', 'ambulance')
+        hospital_id = request.data.get('hospital_id')
+        urgence_type = request.data.get('urgence_type', 'general')
         
         cache = TrafficCache.get_instance()
         now_mins = timezone.now().hour * 60 + timezone.now().minute
         
+        # 1. Path Integrity (Twist 04)
         blocked_segments = []
-        print(f"DEBUG TWIST 04: Checking {len(segment_ids)} segments. First ones: {segment_ids[:5]}...")
         for sid in segment_ids:
-            mult = cache.get_multiplier(sid, now_mins)
-            if mult >= 99.0:
-                print(f"!!! DETECTED BLOCKED SEGMENT: {sid} (mult={mult}) !!!")
+            if cache.get_multiplier(sid, now_mins) >= 99.0:
                 blocked_segments.append(sid)
         
-        if not blocked_segments:
-            print("DEBUG TWIST 04: All segments valid. No alert triggered.")
+        # 2. Dependency Integrity (Twist 05)
+        # Check if the target hospital is still compatible
+        hospital_valid = True
+        reason = "path_blocked" if blocked_segments else "ok"
         
+        if hospital_id:
+            try:
+                h = Hospital.objects.get(id=hospital_id)
+                if not h.urgences_disponibles:
+                    hospital_valid = False
+                    reason = "hospital_closed"
+                elif urgence_type == 'trauma' and 'trauma' not in (h.specialites or []):
+                    hospital_valid = False
+                    reason = "hospital_trauma_saturated"
+            except Hospital.DoesNotExist:
+                hospital_valid = False
+                reason = "hospital_missing"
+
         return Response({
-            "is_valid": len(blocked_segments) == 0,
+            "is_valid": len(blocked_segments) == 0 and hospital_valid,
             "blocked_count": len(blocked_segments),
-            "blocked_segments": blocked_segments
+            "hospital_valid": hospital_valid,
+            "integrity_failure_reason": reason
         })
+
+class SabotageHospitalView(APIView):
+    def post(self, request, pk):
+        try:
+            h = Hospital.objects.get(pk=pk)
+            # Handle list as JSONField
+            specs = h.specialites or []
+            if 'trauma' in specs:
+                h.specialites = [s for s in specs if s != 'trauma']
+            else:
+                h.urgences_disponibles = False 
+            h.save()
+            return Response({"message": f"Hôpital {h.name} saboté / saturé !"})
+        except Hospital.DoesNotExist:
+            return Response({"error": "Hôpital non trouvé"}, status=404)
 
 class TrafficResetView(APIView):
     def post(self, request):
