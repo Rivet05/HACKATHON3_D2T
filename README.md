@@ -27,6 +27,11 @@ Système de routage d'urgence hautement résilient conçu pour le Hackathon Hack
 - **Score de Confiance** : Calcul en temps réel de la fiabilité de la mission (ETA +/- incertitude).
 - **Alerte de Fragilité** : Détection quand une incertitude locale contamine la stabilité globale du trajet.
 
+### 📐 Twist 07 : Routage Directionnel (Turn Costs)
+- **Calcul de Virage** : Le moteur A* est désormais directionnel. Il calcule l'angle d'entrée/sortie des intersections.
+- **Pénalité de Manœuvre** : Les virages serrés et demi-tours sont pénalisés pour simuler la réalité d'une ambulance dans Yaoundé.
+- **Propagation de la Complexité** : Un virage complexe augmente la variance cumulée, rendant le trajet global plus fragile.
+
 ## 🛠️ Guide de Démonstration (Le "Wow" Final)
 
 1. **Calcul** : Sélectionnez un point de départ et le type **TRAUMA**.

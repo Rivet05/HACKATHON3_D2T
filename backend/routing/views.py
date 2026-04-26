@@ -80,7 +80,7 @@ class RouteCalculationView(APIView):
             depart_nom=location_name,
             hopital_choisi=hopital,
             hopitaux_consideres=[],
-            raison_choix=f"Optimisation stochastique ({total_cost:.1f}min +/- {total_sd:.1f}min). " + ("(DR)" if contains_recovery else ""),
+            raison_choix=f"Routage directionnel ({total_cost:.1f}min +/- {total_sd:.1f}min). Prise en compte de la complexité des manœuvres. " + ("(Mode DR)" if contains_recovery else ""),
             eta_minutes=total_cost,
             nb_noeuds_explores=nodes_explored,
             temps_calcul_ms=duration_ms,

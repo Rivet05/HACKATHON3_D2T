@@ -102,15 +102,15 @@ class RoutingEngine:
             h_node = self.graph_builder.find_nearest_node(h.lat, h.lng)
             G.add_edge(h_node, target_node, weight=h.temps_attente_min * 60, is_virtual=True, hospital_id=h.id)
 
-        queue = [(0, 0, 0, start_node, [])] # priority, current_cost, current_variance, node, path
-        visited = {} # node -> (cost, variance)
+        queue = [(0, 0, 0, start_node, None, [])] # priority, current_cost, current_var, node, prev_node, path
+        visited = {} # (node, prev_node) -> (cost, variance)
         found_path = None
         final_cost = 0
         final_variance = 0
         nodes_explored = 0
 
         while queue:
-            priority, current_cost, current_var, current_node, path = heapq.heappop(queue)
+            priority, current_cost, current_var, current_node, prev_node, path = heapq.heappop(queue)
             nodes_explored += 1
             
             if current_node == target_node:
@@ -119,30 +119,52 @@ class RoutingEngine:
                 final_variance = current_var
                 break
                 
-            if current_node in visited and visited[current_node][0] <= current_cost:
+            state = (current_node, prev_node)
+            if state in visited and visited[state][0] <= current_cost:
                 continue
-            visited[current_node] = (current_cost, current_var)
+            visited[state] = (current_cost, current_var)
             
             if current_node in G:
-                # 1. Successors
                 for neighbor, edge_data in G[current_node].items():
                     arrival_time_mins = base_time_mins + (current_cost / 60.0)
                     
+                    # Twist 07: TURN COSTS
+                    turn_penalty = 0
+                    if prev_node and prev_node in G and neighbor in G:
+                        # Simple Angle Calculation
+                        p = G.nodes[prev_node]
+                        c = G.nodes[current_node]
+                        n = G.nodes[neighbor]
+                        if all(k in p and k in c and k in n for k in ['lat', 'lng']):
+                            # Vectors
+                            v1 = (c['lat'] - p['lat'], c['lng'] - p['lng'])
+                            v2 = (n['lat'] - c['lat'], n['lng'] - c['lng'])
+                            # Dot product for cosine
+                            dot = v1[0]*v2[0] + v1[1]*v2[1]
+                            mag1 = math.sqrt(v1[0]**2 + v1[1]**2)
+                            mag2 = math.sqrt(v2[0]**2 + v2[1]**2)
+                            if mag1 > 0 and mag2 > 0:
+                                cos_theta = max(-1, min(1, dot / (mag1 * mag2)))
+                                angle = math.degrees(math.acos(cos_theta))
+                                if angle > 45: # Significant turn
+                                    turn_penalty = 15.0 # 15s penalty
+                                if angle > 90: # Sharp turn / U-turn
+                                    turn_penalty = 45.0 # 45s penalty
+                    
                     if edge_data.get('is_virtual'):
                         edge_cost = edge_data.get('weight', 0)
-                        edge_var = 0 # Virtual links are stable
+                        edge_var = 0
                     else:
-                        edge_cost = self.get_edge_cost(current_node, neighbor, edge_data, arrival_time_mins, vehicle_type)
-                        # Twist 06: Variance logic
-                        # Uncertainty increases with traffic multiplier and weather
+                        edge_cost = self.get_edge_cost(current_node, neighbor, edge_data, arrival_time_mins, vehicle_type) + turn_penalty
+                        # Twist 06/07: Uncertainty increases with complexity of maneuver
                         traffic_mult = edge_data.get('traffic_multiplier', 1.0)
-                        edge_var = (edge_cost * 0.1) * traffic_mult # Higher traffic = higher volatility
+                        edge_var = (edge_cost * 0.1) * traffic_mult * (2.0 if turn_penalty > 0 else 1.0)
                     
                     if edge_cost < 1000000.0:
                         new_cost = current_cost + edge_cost
-                        new_var = current_var + (edge_var ** 2) # Sum of variances
-                        h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.50) / (70/3.6)
-                        heapq.heappush(queue, (new_cost + h_val, new_cost, new_var, neighbor, path + [current_node]))
+                        new_var = current_var + (edge_var ** 2)
+                        h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.5) / (70/3.6)
+                        heapq.heappush(queue, (new_cost + h_val, new_cost, new_var, neighbor, current_node, path + [current_node]))
 
                 # 2. Bypass d'urgence (Predecessors = Counter-flow)
                 for neighbor in G.predecessors(current_node):
@@ -154,8 +176,8 @@ class RoutingEngine:
                     if edge_cost < 1000000.0:
                         new_cost = current_cost + edge_cost
                         new_var = current_var + (edge_cost * 0.2) ** 2 # Higher uncertainty in counter-flow
-                        h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.50) / (70/3.6)
-                        heapq.heappush(queue, (new_cost + h_val, new_cost, new_var, neighbor, path + [current_node]))
+                        h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.5) / (70/3.6)
+                        heapq.heappush(queue, (new_cost + h_val, new_cost, new_var, neighbor, current_node, path + [current_node]))
 
         duration_ms = int((time.time() - start_calc_time) * 1000)
         
