@@ -39,14 +39,23 @@ Système de routage d'urgence hautement résilient conçu pour le Hackathon Hack
 - **Contamination par Scarsité** : Si la flotte est saturée, le système ajoute un délai de "File d'Attente Systémique" à l'ETA.
 - **Déploiement Stratégique** : Bouton de confirmation de mission pour tracker les ressources sortantes.
 
+### 📡 Twist 10 : La Chute du Signal (Ghost Routing)
+- **Coupure Réseau Totale** : Simulation d'une perte de liaison avec les capteurs IoT de la ville.
+- **Toxicité des Données Statiques** : Le dispatch continue de router avec les dernières valeurs connues, mais la confiance s'érode dynamiquement (-10%/min).
+- **Contamination par Obsolescence** : La stabilité supposée de la carte devient une dépendance destructrice.
+
+## 🗺️ Moteur Routier Hybride (High-Fidelity)
+Contrairement aux approches classiques, Pulse utilise un moteur de fusion :
+- **Géométrie Réelle** : Chargement des 21Mo de données OSM (`export.geojson`) pour des tracés qui suivent les courbes réelles de Yaoundé.
+- **Mapping Spatial** : Projection des DATA IDs du concours sur le graphe OSM pour une conformité 100% avec le trafic officiel.
+
 ## 🛠️ Guide de Démonstration (L'Effet "Wow" Final)
 
-1. **Planification** : Sélectionnez un point de départ et le type **TRAUMA**.
-2. **Déploiement (Twist 09)** : Cliquez sur **DÉPLOYER LE VÉHICULE**. L'itinéraire de planification disparaît et une **ambulance animée** commence sa route réelle vers l'hôpital sur la carte.
-3. **Saturation Flotte** : Déployez une 2ème ambulance. Notez l'indicateur "Véhicules : 0/2 Disponibles".
-4. **Scarsité Critique** : Tentez un 3ème calcul. L'ETA affichera alors : `+ X min (Attente Flotte)`, prouvant que la rareté des ressources contamine la performance du système.
-5. **Résilience (Twists 04-05)** : Pendant qu'une voiture roule, sabotez un hôpital ou injectez un blocage. Le système Pulse détectera l'invalidité et proposera un recalcul immédiat.
-6. **Éthique (Twist 08)** : Sélectionnez un point dans les banlieues sud pour exposer le biais cartographique et l'indice d'équité.
+1. **Géométrie** : Notez que les tracés ne sont plus des lignes droites mais suivent parfaitement les rues réelles de Yaoundé (Twists Geometry).
+2. **Planification** : Sélectionnez un point de départ et le type **TRAUMA**.
+3. **Déploiement (Twist 09)** : Cliquez sur **DÉPLOYER LE VÉHICULE**. Observez l'ambulance animée en temps-réel.
+4. **The Ghost Routing (Twist 10)** : Cliquez sur **COUPER LA LIAISON RÉSEAU**. Attendez quelques secondes et relancez un calcul : l'interface affichera une alerte orange **"DONNÉES SPECTRES"** et une confiance dégradée, montrant que l'IA détecte sa propre perte de fiabilité due au temps.
+5. **Résilience (Twists 04-05)** : Simulez un sabotage pour voir le recalcul immédiat.
 
 ## ⚙️ Installation Rapide
 

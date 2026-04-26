@@ -120,15 +120,35 @@ class TrafficCache:
         cls._last_update = {}
         cls.load_from_csv()
 
+    _is_offline = False
+    _cut_time = None
+
+    @classmethod
+    def set_offline(cls, status=True):
+        cls._is_offline = status
+        cls._cut_time = time.time() if status else None
+
     @classmethod
     def get_stats(cls):
         now = time.time()
         ages = [now - t for t in cls._last_update.values()]
         avg_age = sum(ages) / len(ages) if ages else 0
         staleness_count = sum(1 for a in ages if a > 900)
+        
+        confidence = max(0, 1.0 - (staleness_count / len(cls._slots))) if cls._slots else 1.0
+        
+        # Twist 10: Progressive Contamination by Staleness
+        if cls._is_offline and cls._cut_time:
+            offline_duration_min = (now - cls._cut_time) / 60
+            # Lost 10% confidence every minute of isolation
+            decay = max(0, 1.0 - (offline_duration_min * 0.1))
+            confidence *= decay
+            
         return {
             "slots_utilises": len(cls._slots),
             "age_moyen_secondes": int(avg_age),
             "slots_perimes": staleness_count,
-            "confiance_globale": max(0, 1.0 - (staleness_count / len(cls._slots))) if cls._slots else 1.0
+            "confiance_globale": confidence,
+            "is_offline": cls._is_offline,
+            "offline_duration_sec": int(now - cls._cut_time) if cls._cut_time else 0
         }

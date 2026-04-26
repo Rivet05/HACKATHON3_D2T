@@ -3,7 +3,7 @@ import MapView from './components/MapView';
 import HospitalPanel from './components/HospitalPanel';
 import { RouteForm, RouteResult, AuditPanel } from './components/RouteResult';
 import { routingService } from './services/api';
-import { ShieldAlert, AlertTriangle, RefreshCcw, Navigation } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, RefreshCcw, Navigation, WifiOff } from 'lucide-react';
 
 function App() {
   const [hospitals, setHospitals] = useState([]);
@@ -19,6 +19,16 @@ function App() {
   const [blockedPoints, setBlockedPoints] = useState([]);
   const [fleet, setFleet] = useState({ available: 2, max: 2, waiting_time_sec: 0 });
   const [activeMissions, setActiveMissions] = useState([]);
+
+  const [isOffline, setIsOffline] = useState(false);
+
+  const handleNetworkCut = async () => {
+    try {
+      const newStatus = !isOffline;
+      await routingService.cutNetwork(newStatus);
+      setIsOffline(newStatus);
+    } catch (err) { }
+  };
 
   useEffect(() => {
     loadHospitals();
@@ -129,10 +139,10 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
-      {/* Sidebar Left */}
-      <div className="w-[400px] flex flex-col p-6 z-10 custom-scrollbar overflow-y-auto">
-        <div className="flex items-center gap-3 mb-8">
+    <div className="flex flex-col md:flex-row h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      {/* Sidebar Left / Top on Mobile */}
+      <div className="w-full md:w-[420px] flex flex-col p-4 md:p-6 z-10 custom-scrollbar overflow-y-auto border-b md:border-b-0 md:border-r border-slate-800/50 bg-slate-950/50 backdrop-blur-xl">
+        <div className="flex items-center gap-3 mb-8 shrink-0">
           <div className="bg-primary p-2 rounded-lg shadow-lg shadow-red-500/30">
             <ShieldAlert size={28} />
           </div>
@@ -279,12 +289,25 @@ function App() {
           </button>
         </div>
 
+        {/* Global Network Control (Twist 10) */}
+        <button
+          onClick={handleNetworkCut}
+          className={`w-full py-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 mb-4 border 
+            ${isOffline
+              ? 'bg-red-600/20 border-red-500/50 text-red-500 animate-pulse'
+              : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+        >
+          <WifiOff size={16} />
+          {isOffline ? 'RÉSEAU COUPÉ (DONNÉES SPECTRES)' : 'COUPER LA LIAISON RÉSEAU'}
+        </button>
+
         <button
           onClick={async () => {
             await routingService.resetTraffic();
             setRouteResult(null);
             setStartPoint(null);
             setActiveMissions([]);
+            setIsOffline(false);
             setIsContaminated(false);
             setIntegrityReason(null);
             loadHospitals();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigation, Clock, ShieldAlert, CheckCircle2, ChevronRight, AlertTriangle, RefreshCcw } from 'lucide-react';
+import { Navigation, Clock, ShieldAlert, CheckCircle2, ChevronRight, AlertTriangle, RefreshCcw, WifiOff } from 'lucide-react';
 
 export const RouteForm = ({ hour, setHour, typeUrgence, setTypeUrgence, onCalculate, loading }) => {
     return (
@@ -119,6 +119,16 @@ export const RouteResult = ({ result }) => {
                         </p>
                         <p className="text-[9px] text-red-300/80 mt-1">
                             L'incertitude locale a contaminé la stabilité globale du trajet. L'heure d'arrivée estimée est purement indicative.
+                        </p>
+                    </div>
+                )}
+                {result.traffic_stats?.is_offline && (
+                    <div className="bg-orange-500/20 border border-orange-500/40 rounded-lg p-3 mt-2">
+                        <p className="text-[10px] text-orange-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                            <WifiOff size={14} /> Données Spectres (Twist 10)
+                        </p>
+                        <p className="text-[9px] text-orange-300/80 mt-1 uppercase">
+                            Connexion perdue. Le dispatch utilise les dernières valeurs connues. Confiance dégradée : -{Math.round(result.traffic_stats.offline_duration_sec / 6 * 10) / 10}%
                         </p>
                     </div>
                 )}

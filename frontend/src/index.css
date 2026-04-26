@@ -36,6 +36,31 @@ body {
   border-radius: 10px;
 }
 
+/* Responsive Sidebar */
+@media (max-width: 768px) {
+  .custom-scrollbar {
+    max-height: 45vh;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Leaflet Responsive Fixes */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+.leaflet-top.leaflet-right {
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .leaflet-control-zoom {
+    display: none;
+    /* Hide zoom on small mobile to save space */
+  }
+}
+
 @keyframes spin-slow {
   from {
     transform: rotate(0deg);

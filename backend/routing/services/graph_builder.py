@@ -114,19 +114,53 @@ class GraphBuilder:
 
     def get_graph(self):
         if self._graph is None:
-            # Priority to real OSM export for high-precision geometry
-            data_path = os.path.join(os.path.dirname(__file__), '../../data/export.geojson')
+            # 1. Load the beautiful geometry from real export
+            export_path = os.path.join(os.path.dirname(__file__), '../../data/export.geojson')
+            synthetic_path = os.path.join(os.path.dirname(__file__), '../../data/yaounde_roads_synthetic.geojson')
             
-            # Fallback to synthetic if real export is missing
-            if not os.path.exists(data_path):
-                 data_path = os.path.join(os.path.dirname(__file__), '../../data/yaounde_roads_synthetic.geojson')
+            if os.path.exists(export_path):
+                print("Loading detailed OSM geometry...")
+                G = self.load_graph(export_path)
+            else:
+                print("Detailed export missing, falling back to synthetic...")
+                G = self.load_graph(synthetic_path)
             
-            if not os.path.exists(data_path):
-                 data_path = os.path.join(os.path.dirname(__file__), '../../data/sample_network.geojson')
-            
-            self.load_graph(data_path)
+            self._graph = G # Set temporary for index preparation
             self._prepare_spatial_index()
+
+            # 2. Inject official segment_ids by spatial proximity if they are different
+            if os.path.exists(synthetic_path) and os.path.exists(export_path):
+                print("Syncing official IDs with detailed geometry...")
+                with open(synthetic_path, 'r') as f:
+                    synth_data = json.load(f)
+                    if 'elements' in synth_data:
+                        self._merge_synthetic_ids(G, synth_data['elements'])
         return self._graph
+
+    def _merge_synthetic_ids(self, G, elements):
+        """Map synthetic road_ids to nearest edges in our detailed graph"""
+        # We find coords of synthetic nodes to locate where ways are
+        nodes_map = {str(el['id']): (el['lat'], el.get('lon') or el.get('lng')) for el in elements if el['type'] == 'node'}
+        
+        for el in elements:
+            if el['type'] == 'way':
+                way_id = str(el['id'])
+                node_ids = [str(nid) for nid in el.get('nodes', [])]
+                if len(node_ids) < 2: continue
+                
+                # Find the center point of this synthetic segment
+                mid_node = node_ids[len(node_ids)//2]
+                if mid_node in nodes_map:
+                    lat, lon = nodes_map[mid_node]
+                    # Find nearest node in our detailed graph
+                    target_u = self.find_nearest_node(lat, lon)
+                    # Find edges connected to this node and tag them
+                    if target_u in G:
+                        for neighbor in G[target_u]:
+                            G[target_u][neighbor]['segment_id'] = way_id
+                        # Also tag incoming
+                        for prev in G.predecessors(target_u):
+                            G[prev][target_u]['segment_id'] = way_id
 
     def _prepare_spatial_index(self):
         import numpy as np

@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
+from rest_framework.decorators import api_view
 from .models import Hospital, RouteAuditLog
 from .serializers import HospitalSerializer, RouteAuditLogSerializer
 from .services.hospital_selector import HospitalSelector
@@ -265,12 +266,13 @@ class FleetStatusView(APIView):
             "waiting_time_sec": fleet.get_waiting_time()
         })
 
+@api_view(['POST'])
+def cut_network(request):
+    status = request.data.get('status', True)
+    TrafficCache.get_instance().set_offline(status)
+    return Response({"status": "offline" if status else "online"})
+
 class LaunchMissionView(APIView):
     def post(self, request):
         FleetManager.get_instance().launch_mission(duration_mins=5)
         return Response({"message": "Mission lancée, véhicule déployé !"})
-
-
-
-
-
