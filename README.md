@@ -32,16 +32,21 @@ Système de routage d'urgence hautement résilient conçu pour le Hackathon Hack
 
 ### ⚖️ Twist 08 : Biais Algorithmique (Biais d'Invisibilité)
 - **Détection de Zone Blanche** : Identification des quartiers périphériques mal cartographiés.
-- **Pénalité de Données** : L'IA "marginalise" ces zones en augmentant l'incertitude par défaut, exposant le risque d'abandon systémique.
-- **Alerte d'Équité** : Visualisation du biais pour forcer l'opérateur à prendre conscience des inégalités de desserte.
+- **Alerte d'Équité** : Visualisation du biais pour forcer l'opérateur à prendre conscience des inégalités.
 
-## 🛠️ Guide de Démonstration (Le "Wow" Final)
+### 🚑 Twist 09 : Rareté Critique (3 Incidents / 2 Véhicules)
+- **Gestionnaire de Flotte Real-Time** : Suivi des 2 ambulances disponibles pour Yaoundé.
+- **Contamination par Scarsité** : Si la flotte est saturée, le système ajoute un délai de "File d'Attente Systémique" à l'ETA.
+- **Déploiement Stratégique** : Bouton de confirmation de mission pour tracker les ressources sortantes.
 
-1. **Calcul** : Sélectionnez un point de départ et le type **TRAUMA**.
-2. **Sabotage Route** : Cliquez sur "SABOTEUR ROUTE". Des ronds rouges apparaissent sur la carte, l'alerte clignote et l'IA contourne les obstacles.
-3. **Sabotage Hôpital** : Cliquez sur "SABOTEUR HÔPITAL". L'IA détecte la "Saturation Trauma" et redirige immédiatement vers un centre valide.
-4. **Zéro Échec** : Même bloqué, le système active le **Mode Survie** pour trouver une issue héroïque.
-5. **Incertitude** : Observez l'ETA fluctuer avec une marge d'erreur (± X min) et la barre de confiance changer de couleur selon la stabilité du parcours.
+## 🛠️ Guide de Démonstration (L'Effet "Wow" Final)
+
+1. **Planification** : Sélectionnez un point de départ et le type **TRAUMA**.
+2. **Déploiement (Twist 09)** : Cliquez sur **DÉPLOYER LE VÉHICULE**. L'itinéraire de planification disparaît et une **ambulance animée** commence sa route réelle vers l'hôpital sur la carte.
+3. **Saturation Flotte** : Déployez une 2ème ambulance. Notez l'indicateur "Véhicules : 0/2 Disponibles".
+4. **Scarsité Critique** : Tentez un 3ème calcul. L'ETA affichera alors : `+ X min (Attente Flotte)`, prouvant que la rareté des ressources contamine la performance du système.
+5. **Résilience (Twists 04-05)** : Pendant qu'une voiture roule, sabotez un hôpital ou injectez un blocage. Le système Pulse détectera l'invalidité et proposera un recalcul immédiat.
+6. **Éthique (Twist 08)** : Sélectionnez un point dans les banlieues sud pour exposer le biais cartographique et l'indice d'équité.
 
 ## ⚙️ Installation Rapide
 

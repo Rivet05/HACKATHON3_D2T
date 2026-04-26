@@ -101,6 +101,11 @@ export const RouteResult = ({ result }) => {
                                 </span>
                             )}
                         </span>
+                        {result.fleet_wait_min > 0 && (
+                            <span className="text-[8px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-full w-fit mt-1 animate-pulse">
+                                + {result.fleet_wait_min} min (Attente Flotte)
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">

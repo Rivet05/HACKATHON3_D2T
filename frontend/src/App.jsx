@@ -17,12 +17,22 @@ function App() {
   const [isContaminated, setIsContaminated] = useState(false);
   const [integrityReason, setIntegrityReason] = useState(null);
   const [blockedPoints, setBlockedPoints] = useState([]);
+  const [fleet, setFleet] = useState({ available: 2, max: 2, waiting_time_sec: 0 });
+  const [activeMissions, setActiveMissions] = useState([]);
 
   useEffect(() => {
     loadHospitals();
-    const interval = setInterval(loadHospitals, 5000);
+    loadFleet();
+    const interval = setInterval(() => { loadHospitals(); loadFleet(); }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const loadFleet = async () => {
+    try {
+      const res = await routingService.getFleetStatus();
+      setFleet(res.data);
+    } catch (err) { }
+  };
 
   useEffect(() => {
     if (!routeResult || !routeResult.segment_ids || routeResult.is_recovery_path) return;
@@ -174,10 +184,21 @@ function App() {
           </button>
         </div>
 
+        {/* Fleet Availability (Twist 09) */}
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${fleet.available > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500 animate-pulse'}`} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Flux de Flotte</span>
+          </div>
+          <span className={`text-xs font-black ${fleet.available > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {fleet.available} / {fleet.max} DISPONIBLES
+          </span>
+        </div>
+
         <button
           onClick={calculateRoute}
           disabled={loading || !startPoint}
-          className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:from-slate-700 disabled:to-slate-800 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-3 transition-all duration-500 active:scale-95 group mb-4"
+          className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:from-slate-700 disabled:to-slate-800 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-3 transition-all duration-500 active:scale-95 group mb-2"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -187,6 +208,30 @@ function App() {
               <span>LANCER L'INTERVENTION</span>
             </>
           )}
+        </button>
+
+        {/* Deploy Button (Twist 09) */}
+        <button
+          onClick={async () => {
+            await routingService.launchMission();
+            if (routeResult && routeResult.path) {
+              const newMission = {
+                id: Date.now(),
+                path: routeResult.path,
+                color: fleet.available === 2 ? '#3b82f6' : '#8b5cf6' // Blue then Purple
+              };
+              setActiveMissions(prev => [...prev, newMission]);
+              // Clear the calculated route from map to focus on animation
+              setRouteResult(null);
+              setStartPoint(null);
+            }
+            loadFleet();
+          }}
+          disabled={!routeResult || fleet.available === 0}
+          className="w-full bg-green-600/20 border border-green-600/30 hover:bg-green-600/40 text-green-400 font-bold py-3 rounded-xl transition-all disabled:opacity-20 flex items-center justify-center gap-2 mb-6 text-xs"
+        >
+          <RefreshCcw size={16} />
+          DÉPLOYER LE VÉHICULE (CONFIRMER)
         </button>
 
         {/* Demo Sabotage Buttons */}
@@ -238,6 +283,8 @@ function App() {
           onClick={async () => {
             await routingService.resetTraffic();
             setRouteResult(null);
+            setStartPoint(null);
+            setActiveMissions([]);
             setIsContaminated(false);
             setIntegrityReason(null);
             loadHospitals();
@@ -301,6 +348,7 @@ function App() {
           hospitals={hospitals}
           chosenHospital={routeResult?.hospital}
           blockedPoints={blockedPoints}
+          activeMissions={activeMissions}
         />
         {!startPoint && (
           <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur border border-slate-700 px-6 py-3 rounded-full shadow-2xl pointer-events-none">

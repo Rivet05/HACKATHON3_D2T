@@ -8,6 +8,7 @@ from .services.hospital_selector import HospitalSelector
 from .services.routing_engine import RoutingEngine
 from .services.traffic_cache import TrafficCache
 from .services.graph_builder import GraphBuilder
+from .services.fleet_manager import FleetManager
 
 class HospitalListUpdateView(generics.ListAPIView):
     queryset = Hospital.objects.all()
@@ -50,12 +51,19 @@ class RouteCalculationView(APIView):
             # Last fallback: any hospital at all
             eligible = list(Hospital.objects.all())
         
+        now = timezone.now()
+        fleet = FleetManager.get_instance()
+        wait_sec = fleet.get_waiting_time()
+        
         # Twist 02: TD-Algorithm
         # Twist 04: Return segment_ids
         # Twist 06: Return total_sd
         # Twist 08: Return decision_meta
         res = engine.find_route(lat, lng, eligible, hour, minute, vehicle_type=vehicle_type)
         path, hospital_id, total_cost, nodes_explored, duration_ms, location_name, segment_ids, total_sd, decision_meta = res
+        
+        # Twist 09: Systemic Scarcity Contamination
+        final_eta = total_cost + (wait_sec / 60.0)
         
         if not path:
             return Response({"error": "Impossible de trouver un chemin"}, status=404)
@@ -108,7 +116,8 @@ class RouteCalculationView(APIView):
                 "lng": hopital.lng,
                 "wait": hopital.temps_attente_min
             },
-            "eta": round(total_cost, 1),
+            "eta": round(final_eta, 1),
+            "fleet_wait_min": round(wait_sec / 60.0, 1),
             "uncertainty_min": round(total_sd, 1),
             "traffic_stats": {
                 "confiance_globale": confidence,
@@ -191,6 +200,7 @@ class SabotageHospitalView(APIView):
 class TrafficResetView(APIView):
     def post(self, request):
         TrafficCache.get_instance().reset_traffic()
+        FleetManager.get_instance().reset()
         
         # Twist 05: Reset hospitals but keep ONE closed to show the system's discrimination
         hospitals = list(Hospital.objects.all())
@@ -245,6 +255,20 @@ class InjectBlockageView(APIView):
             "blocked_segments": list(target_ids),
             "impact_level": "CRITIQUE"
         })
+
+class FleetStatusView(APIView):
+    def get(self, request):
+        fleet = FleetManager.get_instance()
+        return Response({
+            "available": fleet.get_available_count(),
+            "max": fleet._max_vehicles,
+            "waiting_time_sec": fleet.get_waiting_time()
+        })
+
+class LaunchMissionView(APIView):
+    def post(self, request):
+        FleetManager.get_instance().launch_mission(duration_mins=5)
+        return Response({"message": "Mission lancée, véhicule déployé !"})
 
 
 

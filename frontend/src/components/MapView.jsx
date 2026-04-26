@@ -1,8 +1,9 @@
+import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix for default marker icons in Leaflet
+// ... Leaflet Icon Fix ...
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -14,6 +15,35 @@ L.Icon.Default.mergeOptions({
     shadowUrl: markerShadow,
 });
 
+const MovingVehicle = ({ path, color = "#3b82f6" }) => {
+    const [currentIdx, setCurrentIdx] = useState(0);
+
+    useEffect(() => {
+        if (!path || path.length === 0) return;
+        const interval = setInterval(() => {
+            setCurrentIdx(prev => (prev < path.length - 1 ? prev + 1 : prev));
+        }, 200); // Animation speed
+        return () => clearInterval(interval);
+    }, [path]);
+
+    if (!path || path.length === 0) return null;
+
+    const ambulanceIcon = new L.Icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1042/1042312.png',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+    });
+
+    return (
+        <>
+            <Polyline pathOptions={{ color: color, weight: 3, opacity: 0.4, dashArray: '5, 10' }} positions={path} />
+            <Marker position={path[currentIdx]} icon={ambulanceIcon}>
+                <Popup>Véhicule en mission d'urgence</Popup>
+            </Marker>
+        </>
+    );
+};
+
 const LocationMarker = ({ setStartPoint }) => {
     useMapEvents({
         click(e) {
@@ -23,7 +53,7 @@ const LocationMarker = ({ setStartPoint }) => {
     return null;
 };
 
-const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospital, blockedPoints = [] }) => {
+const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospital, blockedPoints = [], activeMissions = [] }) => {
     const center = [3.848, 11.502];
 
     const hospitalIcon = (isAvailable) => new L.Icon({
@@ -74,8 +104,13 @@ const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospit
             ))}
 
             {routePath && (
-                <Polyline pathOptions={{ color: '#ef4444', weight: 5, opacity: 0.8 }} positions={routePath} />
+                <Polyline pathOptions={{ color: '#ef4444', weight: 6, opacity: 0.9 }} positions={routePath} />
             )}
+
+            {/* Active Missions Animation (Twist 09) */}
+            {activeMissions.map((mission, idx) => (
+                <MovingVehicle key={`mission-${mission.id}`} path={mission.path} color={mission.color} />
+            ))}
 
             {blockedPoints.map((pos, idx) => (
                 <CircleMarker

@@ -15,6 +15,8 @@ export const routingService = {
     resetTraffic: () => api.post('/traffic/reset/'),
     checkIntegrity: (data) => api.post('/route/integrity/', data),
     sabotageHospital: (id) => api.post(`/hospitals/${id}/sabotage/`),
+    getFleetStatus: () => api.get('/fleet/status/'),
+    launchMission: () => api.post('/fleet/launch/'),
 };
 
 export default api;
