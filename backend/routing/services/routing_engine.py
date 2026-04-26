@@ -153,12 +153,27 @@ class RoutingEngine:
                     
                     if edge_data.get('is_virtual'):
                         edge_cost = edge_data.get('weight', 0)
-                        edge_var = 0
+                        # Twist 10: If offline, we can't trust static hospital wait times
+                        if edge_data.get('hospital_id') and self.traffic_cache._is_offline:
+                             now = time.time()
+                             offline_duration_min = (now - self.traffic_cache._cut_time) / 60
+                             # Add a "Suspicion Delay"
+                             edge_cost += (offline_duration_min * 30.0) # Add 30s of doubt for every min offline
+
+                        edge_var = edge_cost * 0.5 if self.traffic_cache._is_offline else 0
                     else:
                         edge_cost = self.get_edge_cost(current_node, neighbor, edge_data, arrival_time_mins, vehicle_type) + turn_penalty
-                        # Twist 06/07: Uncertainty increases with complexity of maneuver
+                        # Twist 06/07/10: Uncertainty increases with complexity and staleness
                         traffic_mult = edge_data.get('traffic_multiplier', 1.0)
-                        edge_var = (edge_cost * 0.1) * traffic_mult * (2.0 if turn_penalty > 0 else 1.0)
+                        
+                        base_var_mult = 0.1
+                        if self.traffic_cache._is_offline:
+                            # Twist 10: Staleness creates massive uncertainty
+                            now = time.time()
+                            offline_duration_min = (now - self.traffic_cache._cut_time) / 60
+                            base_var_mult = 0.5 + (offline_duration_min * 0.2) # Escalation of doubt
+
+                        edge_var = (edge_cost * base_var_mult) * traffic_mult * (2.0 if turn_penalty > 0 else 1.0)
                     
                     if edge_cost < 1000000.0:
                         new_cost = current_cost + edge_cost

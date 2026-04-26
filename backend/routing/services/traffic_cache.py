@@ -89,9 +89,22 @@ class TrafficCache:
     def get_multiplier(cls, road_id, time_mins):
         slot_idx = int((time_mins % 1440) / 5)
         road_id = str(road_id)
+        
+        mult = 1.0
         if road_id in cls._slots:
-            return cls._slots[road_id][slot_idx]
-        return 1.0
+            mult = cls._slots[road_id][slot_idx]
+            
+        # Twist 10: Contamination by Isolation
+        # If we are offline, the uncertainty grows. We assume traffic worsens
+        # by 5% every minute of network isolation to be prudent.
+        if cls._is_offline and cls._cut_time:
+            now = time.time()
+            offline_duration_min = (now - cls._cut_time) / 60
+            # Progressive penalty: mult * (1 + 0.05 * minutes)
+            staleness_penalty = 1.0 + (offline_duration_min * 0.05)
+            mult *= staleness_penalty
+            
+        return mult
 
     @classmethod
     def is_passable(cls, road_id, time_mins, vehicle_type):

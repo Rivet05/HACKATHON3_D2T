@@ -170,6 +170,17 @@ class GraphBuilder:
                 if tagged_count > 0:
                     matches += 1
         
+        # Self-healing: propagate IDs to neighbors who might have been missed by strict proximity
+        for _ in range(2): # 2 passes of propagation
+            for u, v, data in G.edges(data=True):
+                if 'segment_id' not in data:
+                    # Look at neighbors
+                    for neighbor in G[v]:
+                        neighbor_data = G.get_edge_data(v, neighbor)
+                        if neighbor_data and 'segment_id' in neighbor_data:
+                            data['segment_id'] = neighbor_data['segment_id']
+                            break
+
         print(f"Hybrid Sync: {matches}/{total_ways} official ways successfully bound to real geometry.")
 
     def _prepare_spatial_index(self):
