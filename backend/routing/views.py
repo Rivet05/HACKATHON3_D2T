@@ -28,6 +28,9 @@ class RouteCalculationView(APIView):
         hour = int(request.data.get('hour') or request.data.get('heure') or now.hour)
         minute = int(request.data.get('minute', now.minute))
         
+        # Twist 03: Vehicle Type
+        vehicle_type = request.data.get('vehicle_type', 'ambulance')
+        
         engine = RoutingEngine()
         cache = TrafficCache.get_instance()
         
@@ -37,7 +40,7 @@ class RouteCalculationView(APIView):
             eligible = eligible.filter(specialites__contains='trauma')
         
         # Twist 02: TD-Algorithm
-        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name = engine.find_route(lat, lng, eligible, hour, minute)
+        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name = engine.find_route(lat, lng, eligible, hour, minute, vehicle_type=vehicle_type)
         
         if not path:
             return Response({"error": "Impossible de trouver un chemin"}, status=404)
@@ -106,38 +109,40 @@ class InjectBlockageView(APIView):
         
         target_ids = []
         if lat and lng:
-            # Block nodes/edges within roughly 500m
-            # Very simple bounding box filter for speed
             for u, v, data in G.edges(data=True):
                 node_data = G.nodes[u]
                 if 'lat' in node_data:
                     dist = builder.haversine(float(lat), float(lng), node_data['lat'], node_data['lng'])
-                    if dist < 2000: # 2 Kilometers radius
+                    if dist < 500: # Rayon raisonnable
                         target_ids.append(data.get('segment_id'))
-
         
-        # Fallback to random if no lat/lng or no segments found
+        # Fallback to random if no segments found near coordinates
         if not target_ids:
             edges = list(G.edges(data=True))
-            selected = random.sample(edges, min(20, len(edges)))
+            selected = random.sample(edges, min(10, len(edges)))
             target_ids = [d.get('segment_id') for u, v, d in selected]
-            
-        now = timezone.now()
-        
+
         blocked_count = 0
         for sid in target_ids:
             if sid:
-                # Twist 02: Block for ALL slots of the day to be sure
-                for s in range(288):
+                now = timezone.now()
+                slot = (now.hour * 12) + (now.minute // 5)
+                # Block for 2 hours (24 slots)
+                for s in range(slot, min(288, slot + 24)):
                     cache.update_segment(sid, s, 999.0)
                 blocked_count += 1
         
         cache.smooth_fifo()
         
         return Response({
-            "message": f"DÉMO: {blocked_count} segments murés pour 24h",
+            "message": f"DÉMO: {blocked_count} segments bloqués (Rayon 500m)",
             "blocked_count": blocked_count
         })
+
+class TrafficResetView(APIView):
+    def post(self, request):
+        TrafficCache.get_instance().reset_traffic()
+        return Response({"message": "Réseau fluide rétabli !"})
 
 
 

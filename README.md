@@ -15,23 +15,25 @@ L'algorithme ne cherche pas un chemin vers *un* hôpital, mais vers le meilleur 
 - **Bypass d'Urgence** : Le moteur autorise les ambulances à braver les sens uniques en cas d'isolement complet, en appliquant une pénalité de coût massive (x20) pour forcer la préférence au sens légal.
 - **Connectivité Résiliente** : Indexation spatiale arrondissant les coordonnées à 7 décimales pour "recoller" les segments de route OpenStreetMap défectueux.
 
-## 🚀 ÉTAT DU PROJET : TWIST 02 - TEMPORALITÉ ET RÉSILIENCE (VALIDÉ ✅)
+## 🚀 ÉTAT DU PROJET : TWIST 03 - PROFILS ET CONTRAINTES (VALIDÉ ✅)
 
-Le moteur d'urgence est désormais capable de naviguer dans un environnement urbain hostile et dynamique.
+Le système est passé du statut de "GPS" à celui de **Superviseur de Flotte d'Urgence**.
 
-### 🧠 Innovations Techniques (Twist 02)
-*   **Moteur TD-A* (Time-Dependent A*)** : Calcul dynamique du coût des arêtes basé sur l'heure d'arrivée estimée. Le chemin s'adapte à la "vague" de trafic prévue à Yaoundé.
-*   **Traffic Cache (5-min slots)** : Gestion de 288 profils de trafic journaliers avec lissage mathématique FIFO (First-In-First-Out) pour l'optimalité du routage.
-*   **Résilience Spatiale (Stress Test)** : Capacité d'injecter des "murs" de trafic (Rayon de 2km) provoquant un déroutement proactif massif et instantané.
-*   **UI Dynamic Feedback** : Indicateur de fraîcheur des données en temps réel et timeline d'audit enrichie pour suivre les recalculs d'itinéraire.
+### 🧠 Innovations Techniques (Twist 03)
+*   **Routage Polymorphe** : Un seul clic change radicalement le graphe sous-jacent.
+    *   **🚒 Pompier** : Heuristique de gabarit (pénalité massive sur `residential` pour forcer les artères principales).
+    *   **🚑 Ambulance** : Maximisation de l'agilité urbaine pour les raccourcis critiques.
+    *   **🚓 Police** : Priorité maximale et vitesse accrue sur les axes majeurs.
+*   **Modèle Météo-Sensible** : Intégration de la variable `rain` impactant le freinage et la vitesse de croisière selon le poids du véhicule (Inertie simulée).
+*   **Pontage d'Identifiants (Bridge)** : Algorithme capable de mapper des données de trafic hétérogènes (numériques) sur un graphe OSM (`way/ID`) via une heuristique par type de route.
 
-### 🛠️ Démonstration du Twist 02
-1.  **Démarrage** : Lancer le simulateur de flux (`python3 manage.py simulate_traffic`).
-2.  **Injection de Crise** : Utiliser le bouton "⚡ Injecter Embouteillage". Le système paralyse la zone autour du départ et force l'A* à trouver une issue alternative, visible immédiatement sur la carte.
-3.  **Traçabilité** : Vérifier les logs `!!! ENGINE DETECTED BLOCKAGE !!!` prouvant que l'IA a "senti" l'obstacle et l'a contourné.
+### 🛠️ Démonstration du Twist 03
+1.  **Comparaison** : Calculer un trajet en **Ambulance**, puis basculer en **Pompier**. Observer le détour automatique par les grands boulevards de Yaoundé.
+2.  **Reset Global** : Utiliser le bouton vert **"♻️ Reset"** pour restaurer la fluidité totale de la ville après une phase de sabotage.
 
 ---
-*Prochaine étape : TWIST 03 — Convergence Multi-Source & Modèles d'Incertitude.*
+*Build final pour Hackverse 3 — Équipe D2T — Yaoundé 2024*
+
 
 
 ### 3. Performance & Indexation Spatiale

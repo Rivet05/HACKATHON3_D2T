@@ -6,6 +6,9 @@ from datetime import datetime
 class TrafficCache:
     _instance = None
     _slots = {} # { road_id: [multipliers for 288 slots] }
+    _passable_amb = {}
+    _passable_fire = {}
+    _rain = {}
     _last_update = {} # { road_id: timestamp }
     _fifo_violations = 0
 
@@ -16,6 +19,12 @@ class TrafficCache:
         return cls._instance
 
     def __init__(self):
+        self._slots = {} # road_id -> [multiplier_slot_0, ..., multiplier_slot_287]
+        self._passable_amb = {} # road_id -> [bool_slot_0, ...]
+        self._passable_fire = {} # road_id -> [bool_slot_0, ...]
+        self._rain = {} # road_id -> [bool_slot_0, ...]
+        self._last_update = {}
+        self._fifo_violations = 0
         self.load_from_csv()
 
     def load_from_csv(self):
@@ -28,14 +37,26 @@ class TrafficCache:
             for row in reader:
                 road_id = str(row.get('road_id') or row.get('segment_id'))
                 hour = int(row['hour'])
-                mult = float(row['travel_time_multiplier'])
+                mult = float(row.get('travel_time_multiplier', 1.0))
+                is_amb = row.get('passable_ambulance', 'oui').lower() == 'oui'
+                is_fire = row.get('passable_firetruck', 'oui').lower() == 'oui'
+                is_rain = row.get('rain', 'non').lower() == 'oui'
                 
                 if road_id not in self._slots:
                     self._slots[road_id] = [1.0] * 288
+                    self._passable_amb[road_id] = [True] * 288
+                    self._passable_fire[road_id] = [True] * 288
+                    self._rain[road_id] = [False] * 288
                 
-                # Fill the 12 slots for this hour
-                for slot_offset in range(12):
-                    self._slots[road_id][hour * 12 + slot_offset] = mult
+                # Check for 24h data or slot-based
+                # Here we assume hour is 0-23, so we spread it over 12 slots for each hour
+                for m5 in range(12):
+                    idx = (hour * 12) + m5
+                    if idx < 288:
+                        self._slots[road_id][idx] = mult
+                        self._passable_amb[road_id][idx] = is_amb
+                        self._passable_fire[road_id][idx] = is_fire
+                        self._rain[road_id][idx] = is_rain
                 
                 self._last_update[road_id] = time.time()
         
@@ -76,6 +97,31 @@ class TrafficCache:
             print(f"!!! ENGINE DETECTED BLOCKAGE ON {road_id} !!!")
         return multiplier
 
+    def is_passable(self, road_id, time_mins, vehicle_type):
+        slot_idx = int((time_mins % 1440) / 5)
+        road_id = str(road_id)
+        
+        if vehicle_type == 'fire':
+            if road_id in self._passable_fire:
+                return self._passable_fire[road_id][slot_idx]
+        elif vehicle_type == 'ambulance':
+            if road_id in self._passable_amb:
+                return self._passable_amb[road_id][slot_idx]
+        return True # Police or default
+
+    def is_raining(self, road_id, time_mins):
+        slot_idx = int((time_mins % 1440) / 5)
+        road_id = str(road_id)
+        return self._rain.get(road_id, [False]*288)[slot_idx]
+
+    def reset_traffic(self):
+        # Reload initial data to clear manual blockages
+        self._slots = {}
+        self._passable_amb = {}
+        self._passable_fire = {}
+        self._rain = {}
+        self._last_update = {}
+        self.load_from_csv()
 
     def get_stats(self):
         now = time.time()
