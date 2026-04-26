@@ -48,9 +48,8 @@ export const RouteForm = ({ hour, setHour, typeUrgence, setTypeUrgence, onCalcul
 
 export const RouteResult = ({ result }) => {
     if (!result) return null;
-    const stats = result.traffic_stats || {};
-    const confidence = stats.confiance_globale ?? 1.0;
-    const uncertainty = Math.round((1 - confidence) * 5); // up to 5 min uncertainty
+    const uncertainty = result.uncertainty_min || 0;
+    const confidence = result.traffic_stats?.confiance_globale ?? 1.0;
 
     return (
         <div className="flex flex-col gap-4 mt-4 animate-in fade-in slide-in-from-top duration-300">
@@ -58,17 +57,18 @@ export const RouteResult = ({ result }) => {
             <div className={`px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 w-fit
                 ${confidence > 0.8
                     ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                    : confidence > 0.5
+                    : confidence > 0.4
                         ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                         : 'bg-red-500/10 border-red-500/30 text-red-400 animate-pulse'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${confidence > 0.8 ? 'bg-green-400' : confidence > 0.5 ? 'bg-yellow-400' : 'bg-red-400'}`} />
-                {confidence > 0.8 ? 'Données Fraîches' : confidence > 0.5 ? 'Données Dégradées' : 'Données Suspectes'}
-                <span className="opacity-50">• {stats.age_moyen_secondes}s</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${confidence > 0.8 ? 'bg-green-400' : confidence > 0.4 ? 'bg-yellow-400' : 'bg-red-400'}`} />
+                {confidence > 0.8 ? 'Trajet Stable' : confidence > 0.4 ? 'Risque de Retard' : 'Incertitude Critique'}
+                <span className="opacity-50">• Confiance {Math.round(confidence * 100)}%</span>
             </div>
 
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-green-400 font-bold">
-                    <CheckCircle2 size={20} /> Meilleur itinéraire trouvé
+            <div className={`border rounded-xl p-5 flex flex-col gap-2 transition-all duration-500 ${confidence < 0.4 ? 'bg-red-500/10 border-red-500/30' : 'bg-green-500/10 border-green-500/20'}`}>
+                <div className={`flex items-center gap-2 font-bold ${confidence < 0.4 ? 'text-red-400' : 'text-green-400'}`}>
+                    {confidence < 0.4 ? <ShieldAlert size={20} /> : <CheckCircle2 size={20} />}
+                    {confidence < 0.4 ? 'Mission à Risque Élevé' : 'Meilleur itinéraire trouvé'}
                 </div>
                 <div className="text-2xl font-black">{result.hospital.name}</div>
 
@@ -80,14 +80,25 @@ export const RouteResult = ({ result }) => {
                             {result.eta.toFixed(0)}
                             <span className="text-xs font-medium text-slate-400">min</span>
                             {uncertainty > 0 && (
-                                <span className="text-xs text-slate-500 ml-1 font-medium">± {uncertainty}m</span>
+                                <span className={`text-xs ml-1 font-black ${confidence < 0.4 ? 'text-red-500' : 'text-slate-500'}`}>
+                                    ± {uncertainty.toFixed(1)}m
+                                </span>
                             )}
                         </span>
                     </div>
                 </div>
-                {uncertainty > 0 && (
-                    <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
-                        <div className="h-full bg-yellow-500/30" style={{ width: `${(uncertainty / 10) * 100}%` }} />
+                <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
+                    <div className={`h-full transition-all duration-1000 ${confidence < 0.4 ? 'bg-red-500' : 'bg-indigo-500'}`}
+                        style={{ width: `${confidence * 100}%` }} />
+                </div>
+                {confidence < 0.4 && (
+                    <div className="bg-red-500/20 border border-red-500/40 rounded-lg p-3 mt-4 animate-pulse">
+                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                            <RefreshCcw size={14} className="animate-spin-slow" /> Turbulence Atmosphérique (Twist 06)
+                        </p>
+                        <p className="text-[9px] text-red-300/80 mt-1">
+                            L'incertitude locale a contaminé la stabilité globale du trajet. L'heure d'arrivée estimée est purement indicative.
+                        </p>
                     </div>
                 )}
             </div>

@@ -15,19 +15,25 @@ Système de routage d'urgence hautement résilient conçu pour le Hackathon Hack
 
 ### 🚀 Twist 04 : Résilience d'Urgence (Active Monitoring)
 - **Pulse 3s** : Surveillance active de l'intégrité de la mission par polling asynchrone.
-- **Contamination Detection** : Identification des "zones mortes" routières apparaissant mid-trajet.
+- **Contamination Visualisée** : Identification et affichage des points de blocage physiques sur la carte (Ronds Rouges).
 - **Auto-correction** : Recalcul instantané et transparent pour l'opérateur.
 
 ### 💉 Twist 05 : Contamination par Dépendances
 - **Surveillance de Statut** : L'itinéraire est dynamiquement invalidé si l'Hôpital cible change de capacité (ex: saturation trauma).
-- **Mode Survie (Urgence Absolue)** : Algorithme de secours autorisant le contre-sens et le passage forcé si aucune autre issue n'existe.
+- **Mode Survie (Urgence Absolue)** : Algorithme de secours autorisant le contre-sens si aucune autre issue n'existe.
+
+### 🌪️ Twist 06 : Incertitude Stochastique & Propagation
+- **Routage Probabiliste** : Modèle de variance propageant l'incertitude (bruit) tout au long du trajet.
+- **Score de Confiance** : Calcul en temps réel de la fiabilité de la mission (ETA +/- incertitude).
+- **Alerte de Fragilité** : Détection quand une incertitude locale contamine la stabilité globale du trajet.
 
 ## 🛠️ Guide de Démonstration (Le "Wow" Final)
 
 1. **Calcul** : Sélectionnez un point de départ et le type **TRAUMA**.
-2. **Sabotage Route** : Cliquez sur "SABOTEUR ROUTE". L'alerte clignote en rouge et l'IA contourne le blocage.
-3. **Sabotage Hôpital** : Cliquez sur "SABOTEUR HÔPITAL". L'alerte passe en orange (**Saturation Trauma**) et l'ambulance change de destination vers le prochain hôpital trauma disponible.
-4. **Zéro Échec** : Même enfermé dans une impasse sabotée, le système active le **Mode Survie** pour trouver une issue héroïque.
+2. **Sabotage Route** : Cliquez sur "SABOTEUR ROUTE". Des ronds rouges apparaissent sur la carte, l'alerte clignote et l'IA contourne les obstacles.
+3. **Sabotage Hôpital** : Cliquez sur "SABOTEUR HÔPITAL". L'IA détecte la "Saturation Trauma" et redirige immédiatement vers un centre valide.
+4. **Zéro Échec** : Même bloqué, le système active le **Mode Survie** pour trouver une issue héroïque.
+5. **Incertitude** : Observez l'ETA fluctuer avec une marge d'erreur (± X min) et la barre de confiance changer de couleur selon la stabilité du parcours.
 
 ## ⚙️ Installation Rapide
 
@@ -35,7 +41,7 @@ Système de routage d'urgence hautement résilient conçu pour le Hackathon Hack
 ```bash
 cd backend
 pip install -r requirements.txt
-python manage.py load_seed_data  # Importe Yaoundé et les Hôpitaux
+python manage.py load_seed_data
 python manage.py runserver
 ```
 

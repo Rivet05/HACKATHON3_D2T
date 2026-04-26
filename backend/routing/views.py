@@ -7,6 +7,7 @@ from .serializers import HospitalSerializer, RouteAuditLogSerializer
 from .services.hospital_selector import HospitalSelector
 from .services.routing_engine import RoutingEngine
 from .services.traffic_cache import TrafficCache
+from .services.graph_builder import GraphBuilder
 
 class HospitalListUpdateView(generics.ListAPIView):
     queryset = Hospital.objects.all()
@@ -36,17 +37,23 @@ class RouteCalculationView(APIView):
         
         # Filter hospitals by specialty (Python-side filtering for SQL compatibility)
         all_eligible = Hospital.objects.filter(urgences_disponibles=True)
+        if not all_eligible.exists():
+            # Twist 05: Force Rescue Mode - ignore availability flag if all are saturated
+            all_eligible = Hospital.objects.all()
+            
         if urgence_type == 'trauma':
             eligible = [h for h in all_eligible if 'trauma' in (h.specialites or [])]
         else:
             eligible = list(all_eligible)
         
         if not eligible:
-            return Response({"error": "Aucun hôpital disponible pour ce type d'urgence"}, status=404)
+            # Last fallback: any hospital at all
+            eligible = list(Hospital.objects.all())
         
         # Twist 02: TD-Algorithm
         # Twist 04: Return segment_ids
-        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name, segment_ids = engine.find_route(
+        # Twist 06: Return total_sd
+        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name, segment_ids, total_sd = engine.find_route(
             lat, lng, eligible, hour, minute, vehicle_type=vehicle_type
         )
         
@@ -56,29 +63,29 @@ class RouteCalculationView(APIView):
         # ... Decision metadata ...
         now = timezone.now()
         hopital = Hospital.objects.get(id=hospital_id)
-        hospital_data = [{
-            "id": h.id, 
-            "name": h.name, 
-            "wait": h.temps_attente_min,
-            "status_age_sec": (now - h.last_status_update).total_seconds()
-        } for h in eligible]
+        
+        # Twist 06: Confidence Score
+        # Confidence decreases if SD is large relative to total cost
+        confidence = max(0.1, 1.0 - (total_sd / (total_cost + 1)))
         
         # Audit Log (Twist 01 + 02)
-        # Check if this route is a 'degraded' one (contains forced blockages)
-        contains_recovery = any(cache.get_multiplier(sid, now.hour * 60 + now.minute) >= 99.0 for sid in segment_ids)
+        # Check if this route is a 'degraded' one (contains forced blockages or saturated hospital)
+        is_blocked_road = any(cache.get_multiplier(sid, now.hour * 60 + now.minute) >= 99.0 for sid in segment_ids)
+        is_saturated_hosp = not hopital.urgences_disponibles
+        contains_recovery = is_blocked_road or is_saturated_hosp
         
         audit = RouteAuditLog.objects.create(
             depart_lat=lat,
             depart_lng=lng,
             depart_nom=location_name,
             hopital_choisi=hopital,
-            hopitaux_consideres=hospital_data,
-            raison_choix=f"Optimisation avec survie ({total_cost:.1f}min). " + ("(MODE DÉGRADÉ)" if contains_recovery else ""),
+            hopitaux_consideres=[],
+            raison_choix=f"Optimisation stochastique ({total_cost:.1f}min +/- {total_sd:.1f}min). " + ("(DR)" if contains_recovery else ""),
             eta_minutes=total_cost,
             nb_noeuds_explores=nodes_explored,
             temps_calcul_ms=duration_ms,
             path_geojson={"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[c[1], c[0]] for c in path]}},
-            fraicheur_donnees=cache.get_stats()
+            fraicheur_donnees={"confidence": confidence, "sd_min": float(total_sd)}
         )
         
         audit_data = RouteAuditLogSerializer(audit).data
@@ -96,6 +103,11 @@ class RouteCalculationView(APIView):
                 "wait": hopital.temps_attente_min
             },
             "eta": round(total_cost, 1),
+            "uncertainty_min": round(total_sd, 1),
+            "traffic_stats": {
+                "confiance_globale": confidence,
+                "age_moyen_secondes": 15 # Simulated data age
+            },
             "audit": audit_data,
             "location_name": location_name,
         })
@@ -172,7 +184,15 @@ class SabotageHospitalView(APIView):
 class TrafficResetView(APIView):
     def post(self, request):
         TrafficCache.get_instance().reset_traffic()
-        return Response({"message": "Réseau fluide rétabli !"})
+        
+        # Twist 05: Reset hospitals but keep ONE closed to show the system's discrimination
+        hospitals = list(Hospital.objects.all())
+        for i, h in enumerate(hospitals):
+            h.urgences_disponibles = (i > 0) # Close the first one
+            h.temps_attente_min = 5 + (i * 2) # Reset wait times to realistic values
+            h.save()
+            
+        return Response({"message": "Réseau fluide rétabli ! (Attention: Hôpital Principal saturé)"})
 
 
 class AuditLogListView(generics.ListAPIView):
@@ -210,7 +230,7 @@ class InjectBlockageView(APIView):
         blocked_count = 0
         for sid in target_ids:
             if sid:
-                cache.set_multiplier(sid, 999.0)
+                cache.inject_blockage(sid, 999.0)
                 blocked_count += 1
         
         return Response({

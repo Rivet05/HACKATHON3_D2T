@@ -69,6 +69,15 @@ class TrafficCache:
                         cls._fifo_violations += 1
 
     @classmethod
+    def inject_blockage(cls, road_id, multiplier=999.0):
+        """Block all time slots for this segment (permanent blockage until reset)"""
+        road_id = str(road_id)
+        if road_id not in cls._slots:
+            cls._slots[road_id] = [1.0] * 288
+        cls._slots[road_id] = [multiplier] * 288
+        cls._last_update[road_id] = time.time()
+
+    @classmethod
     def update_segment(cls, road_id, slot_idx, multiplier):
         road_id = str(road_id)
         if road_id not in cls._slots:
