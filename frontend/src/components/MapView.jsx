@@ -56,11 +56,15 @@ const LocationMarker = ({ setStartPoint }) => {
 const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospital, blockedPoints = [], activeMissions = [] }) => {
     const center = [3.848, 11.502];
 
-    const hospitalIcon = () => new L.Icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/822/822159.png',
-        iconSize: [35, 35],
-        iconAnchor: [17, 17],
-        popupAnchor: [0, -17],
+    const hospitalIcon = (isAvailable) => new L.Icon({
+        iconUrl: isAvailable
+            ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2-green.png'
+            : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2-red.png',
+        shadowUrl: markerShadow,
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
     });
 
     const startIcon = new L.Icon({
@@ -89,7 +93,7 @@ const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospit
                 <Marker
                     key={h.id}
                     position={[h.lat, h.lng]}
-                    icon={hospitalIcon()}
+                    icon={hospitalIcon(h.urgences_disponibles)}
                 >
                     <Popup>
                         <div className="font-bold">{h.name}</div>
