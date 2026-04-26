@@ -148,13 +148,10 @@ class RouteIntegrityView(APIView):
 
         for sid in segment_ids:
             if cache.get_multiplier(sid, now_mins) >= 99.0:
-                # Find a coordinate for this segment to show on map
-                # We search for the first edge that matches this segment_id
-                for u, v, d in G.edges(data=True):
-                    if d.get('segment_id') == sid:
-                        if u in node_coords:
-                            blocked_points.append(node_coords[u])
-                            break
+                # Optimized search using pre-calculated map
+                target_node = builder._segment_to_node.get(str(sid))
+                if target_node and target_node in node_coords:
+                    blocked_points.append(node_coords[target_node])
         
         # 2. Dependency Integrity (Twist 05)
         # ... (rest of the logic)

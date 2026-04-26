@@ -6,6 +6,8 @@ import math
 class GraphBuilder:
     _instance = None
     _graph = None
+    _nodes_coords = None
+    _segment_to_node = {} # Map segment_id -> some node_id for fast lookup
 
     @classmethod
     def get_instance(cls):
@@ -77,6 +79,7 @@ class GraphBuilder:
             self._add_edge(G, u, v, u_data, v_data, way_id, tags)
 
     def _add_edge(self, G, u, v, u_data, v_data, way_id, tags):
+        self._segment_to_node[str(way_id)] = u
         dist = self.haversine(u_data['lat'], u_data['lng'], v_data['lat'], v_data['lng'])
         oneway = tags.get('oneway') in ['yes', 'true', '1']
         
@@ -152,20 +155,21 @@ class GraphBuilder:
                 # For each node in the synthetic way, find the closest edges in our real graph
                 # and tag them with this competition way_id
                 tagged_count = 0
+                # Tagging + Optimization Map
                 for nid in node_ids:
                     if nid not in nodes_map: continue
                     lat, lon = nodes_map[nid]
-                    
-                    # Search around this point (find multiple nearest nodes to cover intersections)
                     near_nodes = self.find_nearest_nodes(lat, lon, k=3)
-                    for u in near_nodes:
-                        if u in G:
-                            # Tag all incident edges
-                            for v in G[u]:
-                                G[u][v]['segment_id'] = way_id
+                    for u_near in near_nodes:
+                        if u_near in G:
+                            # Set optimization map
+                            self._segment_to_node[way_id] = u_near
+                            # Tag incident edges
+                            for v_near in G[u_near]:
+                                G[u_near][v_near]['segment_id'] = way_id
                                 tagged_count += 1
-                            for p in G.predecessors(u):
-                                G[p][u]['segment_id'] = way_id
+                            for p_near in G.predecessors(u_near):
+                                G[p_near][u_near]['segment_id'] = way_id
                                 tagged_count += 1
                 if tagged_count > 0:
                     matches += 1
