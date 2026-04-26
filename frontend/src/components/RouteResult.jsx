@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigation, Clock, ShieldAlert, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Navigation, Clock, ShieldAlert, CheckCircle2, ChevronRight, AlertTriangle, RefreshCcw } from 'lucide-react';
 
 export const RouteForm = ({ hour, setHour, typeUrgence, setTypeUrgence, onCalculate, loading }) => {
     return (
@@ -50,9 +50,25 @@ export const RouteResult = ({ result }) => {
     if (!result) return null;
     const uncertainty = result.uncertainty_min || 0;
     const confidence = result.traffic_stats?.confiance_globale ?? 1.0;
+    const equityScore = result.traffic_stats?.equity_score ?? 1.0;
 
     return (
         <div className="flex flex-col gap-4 mt-4 animate-in fade-in slide-in-from-top duration-300">
+            {/* Bias Alert (Twist 08) */}
+            {equityScore < 1.0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3">
+                    <div className="p-2 bg-amber-500/20 rounded-lg text-amber-400">
+                        <AlertTriangle size={18} />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Biais Cartographique Détecté</p>
+                        <p className="text-[9px] text-amber-200/70 mt-1 uppercase font-bold tracking-tighter">
+                            Zone périphérique à faible densité de données. Le système applique une pénalité de confiance systématique.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Freshness Indicator (Twist 02) */}
             <div className={`px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 w-fit
                 ${confidence > 0.8

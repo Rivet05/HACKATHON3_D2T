@@ -28,9 +28,12 @@ Système de routage d'urgence hautement résilient conçu pour le Hackathon Hack
 - **Alerte de Fragilité** : Détection quand une incertitude locale contamine la stabilité globale du trajet.
 
 ### 📐 Twist 07 : Routage Directionnel (Turn Costs)
-- **Calcul de Virage** : Le moteur A* est désormais directionnel. Il calcule l'angle d'entrée/sortie des intersections.
-- **Pénalité de Manœuvre** : Les virages serrés et demi-tours sont pénalisés pour simuler la réalité d'une ambulance dans Yaoundé.
-- **Propagation de la Complexité** : Un virage complexe augmente la variance cumulée, rendant le trajet global plus fragile.
+- **Manœuvre Urbaine** : Prise en compte de la difficulté des virages dans le calcul de l'ETA.
+
+### ⚖️ Twist 08 : Biais Algorithmique (Biais d'Invisibilité)
+- **Détection de Zone Blanche** : Identification des quartiers périphériques mal cartographiés.
+- **Pénalité de Données** : L'IA "marginalise" ces zones en augmentant l'incertitude par défaut, exposant le risque d'abandon systémique.
+- **Alerte d'Équité** : Visualisation du biais pour forcer l'opérateur à prendre conscience des inégalités de desserte.
 
 ## 🛠️ Guide de Démonstration (Le "Wow" Final)
 

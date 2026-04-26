@@ -179,8 +179,24 @@ class RoutingEngine:
                         h_val = self.haversine(G.nodes[neighbor].get('lat', lat), G.nodes[neighbor].get('lng', lng), 3.84, 11.5) / (70/3.6)
                         heapq.heappush(queue, (new_cost + h_val, new_cost, new_var, neighbor, current_node, path + [current_node]))
 
+        # Twist 08: Invisible Bias Detection (Peripheral/Poorly Mapped Areas)
+        # We simulate a "Data Void" zone in Yaounde suburbs
+        is_in_data_void = (lat < 3.82) # Simulated: South peripheral areas are "poorly mapped"
+        mapping_confidence = 0.95
+        if is_in_data_void:
+            mapping_confidence = 0.4 # Critical mapping gap
+            # Implicit penalty: lack of data makes the system "think" it's slower
+            final_cost *= 1.15 
+            final_variance *= 2.0
+
         duration_ms = int((time.time() - start_calc_time) * 1000)
         
+        # Twist 08: Metadata for Audit
+        decision_meta = {
+            "mapping_confidence": mapping_confidence,
+            "bias_detected": is_in_data_void,
+            "equity_score": 1.0 if mapping_confidence > 0.8 else mapping_confidence
+        }
         if found_path:
             coords_path = []
             segment_ids = []
@@ -201,6 +217,6 @@ class RoutingEngine:
             hospital_id = edge_to_target.get('hospital_id') if edge_to_target else None
 
             total_sd = math.sqrt(final_variance)
-            return coords_path, hospital_id, final_cost / 60.0, nodes_explored, duration_ms, location_name, segment_ids, total_sd / 60.0
+            return coords_path, hospital_id, final_cost / 60.0, nodes_explored, duration_ms, location_name, segment_ids, total_sd / 60.0, decision_meta
             
-        return None, None, 0, 0, 0, location_name, [], 0
+        return None, None, 0, 0, 0, location_name, [], 0, {"mapping_confidence": 1.0}

@@ -53,9 +53,9 @@ class RouteCalculationView(APIView):
         # Twist 02: TD-Algorithm
         # Twist 04: Return segment_ids
         # Twist 06: Return total_sd
-        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name, segment_ids, total_sd = engine.find_route(
-            lat, lng, eligible, hour, minute, vehicle_type=vehicle_type
-        )
+        # Twist 08: Return decision_meta
+        res = engine.find_route(lat, lng, eligible, hour, minute, vehicle_type=vehicle_type)
+        path, hospital_id, total_cost, nodes_explored, duration_ms, location_name, segment_ids, total_sd, decision_meta = res
         
         if not path:
             return Response({"error": "Impossible de trouver un chemin"}, status=404)
@@ -80,12 +80,18 @@ class RouteCalculationView(APIView):
             depart_nom=location_name,
             hopital_choisi=hopital,
             hopitaux_consideres=[],
-            raison_choix=f"Routage directionnel ({total_cost:.1f}min +/- {total_sd:.1f}min). Prise en compte de la complexité des manœuvres. " + ("(Mode DR)" if contains_recovery else ""),
+            raison_choix=f"Routage directionnel ({total_cost:.1f}min +/- {total_sd:.1f}min). " + 
+                         f"Confiance Carto: {int(decision_meta.get('mapping_confidence', 1.0)*100)}%. " +
+                         ("(Mode DR)" if contains_recovery else ""),
             eta_minutes=total_cost,
             nb_noeuds_explores=nodes_explored,
             temps_calcul_ms=duration_ms,
             path_geojson={"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[c[1], c[0]] for c in path]}},
-            fraicheur_donnees={"confidence": confidence, "sd_min": float(total_sd)}
+            fraicheur_donnees={
+                "confidence": confidence, 
+                "sd_min": float(total_sd),
+                "mapping_bias": decision_meta.get('bias_detected', False)
+            }
         )
         
         audit_data = RouteAuditLogSerializer(audit).data
@@ -106,7 +112,8 @@ class RouteCalculationView(APIView):
             "uncertainty_min": round(total_sd, 1),
             "traffic_stats": {
                 "confiance_globale": confidence,
-                "age_moyen_secondes": 15 # Simulated data age
+                "age_moyen_secondes": 15,
+                "equity_score": decision_meta.get('equity_score', 1.0)
             },
             "audit": audit_data,
             "location_name": location_name,
