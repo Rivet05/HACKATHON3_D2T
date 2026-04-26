@@ -16,6 +16,7 @@ function App() {
   const [error, setError] = useState(null);
   const [isContaminated, setIsContaminated] = useState(false);
   const [integrityReason, setIntegrityReason] = useState(null);
+  const [blockedPoints, setBlockedPoints] = useState([]);
 
   useEffect(() => {
     loadHospitals();
@@ -35,7 +36,13 @@ function App() {
         if (!res.data.is_valid && !isContaminated) {
           setIsContaminated(true);
           setIntegrityReason(res.data.integrity_failure_reason);
-          setTimeout(() => { calculateRoute(); setIsContaminated(false); setIntegrityReason(null); }, 2000);
+          setBlockedPoints(res.data.blocked_coordinates || []);
+          setTimeout(() => {
+            calculateRoute();
+            setIsContaminated(false);
+            setIntegrityReason(null);
+            setBlockedPoints([]);
+          }, 2000);
         }
       } catch (err) { }
     }, 3000);
@@ -292,7 +299,8 @@ function App() {
           setStartPoint={setStartPoint}
           routePath={routeResult?.path}
           hospitals={hospitals}
-          chosenHospital={routeResult?.hopital}
+          chosenHospital={routeResult?.hospital}
+          blockedPoints={blockedPoints}
         />
         {!startPoint && (
           <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur border border-slate-700 px-6 py-3 rounded-full shadow-2xl pointer-events-none">

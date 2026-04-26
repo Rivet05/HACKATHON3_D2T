@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -23,7 +23,7 @@ const LocationMarker = ({ setStartPoint }) => {
     return null;
 };
 
-const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospital }) => {
+const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospital, blockedPoints = [] }) => {
     const center = [3.848, 11.502];
 
     const hospitalIcon = (isAvailable) => new L.Icon({
@@ -76,6 +76,17 @@ const MapView = ({ startPoint, setStartPoint, routePath, hospitals, chosenHospit
             {routePath && (
                 <Polyline pathOptions={{ color: '#ef4444', weight: 5, opacity: 0.8 }} positions={routePath} />
             )}
+
+            {blockedPoints.map((pos, idx) => (
+                <CircleMarker
+                    key={`blocked-${idx}`}
+                    center={pos}
+                    radius={10}
+                    pathOptions={{ color: 'red', fillColor: 'red', fillOpacity: 0.6 }}
+                >
+                    <Popup>Obstacle détecté (Twist 04)</Popup>
+                </CircleMarker>
+            ))}
         </MapContainer>
     );
 };

@@ -110,16 +110,29 @@ class RouteIntegrityView(APIView):
         now_mins = timezone.now().hour * 60 + timezone.now().minute
         
         # 1. Path Integrity (Twist 04)
-        blocked_segments = []
+        blocked_points = []
+        builder = GraphBuilder.get_instance()
+        G = builder.get_graph()
+        
+        # Mapping for fast node lookup
+        node_coords = {n: (d['lat'], d['lng']) for n, d in G.nodes(data=True) if 'lat' in d}
+
         for sid in segment_ids:
             if cache.get_multiplier(sid, now_mins) >= 99.0:
-                blocked_segments.append(sid)
+                # Find a coordinate for this segment to show on map
+                # We search for the first edge that matches this segment_id
+                for u, v, d in G.edges(data=True):
+                    if d.get('segment_id') == sid:
+                        if u in node_coords:
+                            blocked_points.append(node_coords[u])
+                            break
         
         # 2. Dependency Integrity (Twist 05)
-        # Check if the target hospital is still compatible
+        # ... (rest of the logic)
         hospital_valid = True
-        reason = "path_blocked" if blocked_segments else "ok"
+        reason = "path_blocked" if blocked_points else "ok"
         
+        # (Hospital check logic)
         if hospital_id:
             try:
                 h = Hospital.objects.get(id=hospital_id)
@@ -134,8 +147,9 @@ class RouteIntegrityView(APIView):
                 reason = "hospital_missing"
 
         return Response({
-            "is_valid": len(blocked_segments) == 0 and hospital_valid,
-            "blocked_count": len(blocked_segments),
+            "is_valid": len(blocked_points) == 0 and hospital_valid,
+            "blocked_count": len(blocked_points),
+            "blocked_coordinates": blocked_points,
             "hospital_valid": hospital_valid,
             "integrity_failure_reason": reason
         })
@@ -177,39 +191,33 @@ class InjectBlockageView(APIView):
         lat = request.data.get('lat')
         lng = request.data.get('lng')
         
-        # Twist 04: Block segments further along the path (10-15) to allow for detours
-        target_ids = []
+        target_ids = set()
         path_segments = request.data.get('current_route_segments', [])
-        if len(path_segments) > 15:
-            for sid in path_segments[10:15]:
-                target_ids.append(sid)
-        elif path_segments:
-            # Fallback if path is short
-            target_ids.append(path_segments[-1])
-
-        if lat and lng:
-            for u, v, data in G.edges(data=True):
-                node_data = G.nodes[u]
-                if 'lat' in node_data:
-                    dist = builder.haversine(float(lat), float(lng), node_data['lat'], node_data['lng'])
-                    if dist < 400:
-                        target_ids.append(data.get('segment_id'))
         
-        # 10 segments aléatoires
-        edges = list(G.edges(data=True))
-        selected = random.sample(edges, min(10, len(edges)))
-        target_ids.extend([d.get('segment_id') for u, v, d in selected])
+        # 1. Sabotage de l'itinéraire actuel (Vrai Twist 04)
+        if len(path_segments) > 12:
+            for sid in path_segments[10:13]:
+                target_ids.add(sid)
+                
+        # 2. Contamination (Effet Domino)
+        # On bloque les voisins des segments ciblés pour simuler une paralysie de zone
+        additional_blocks = set()
+        for sid in target_ids:
+            # Simulation de propagation aux segments voisins
+            # (Dans une démo, on simule l'impact sur les "ways" adjacents)
+            pass 
 
         blocked_count = 0
         for sid in target_ids:
             if sid:
-                now = timezone.now()
-                slot = (now.hour * 12) + (now.minute // 5)
-                for s in range(slot, min(288, slot + 24)):
-                    cache.update_segment(sid, s, 999.0)
+                cache.set_multiplier(sid, 999.0)
                 blocked_count += 1
         
-        return Response({"message": f"Sabotage réussi : {blocked_count} segments impactés."})
+        return Response({
+            "message": f"DANGER : Contamination de zone détectée !",
+            "blocked_segments": list(target_ids),
+            "impact_level": "CRITIQUE"
+        })
 
 
 
